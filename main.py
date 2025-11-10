@@ -145,6 +145,28 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
             break
 
 
+def run_byok_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir: Path):
+    """
+    Run BYOK (Bring Your Own Key) test suite.
+
+    :param keys: Dictionary of API keys for all providers
+    :param providers: Dictionary of provider configurations
+    :param results_dir: Directory path for storing results
+    """
+    test_plan = []
+    for provider_name in providers.keys():
+        test_plan.extend(
+            [
+                (provider_name, ScenarioType.OR_BYOK_SAME),
+                (provider_name, ScenarioType.OR_BYOK_CROSS),
+            ]
+        )
+
+    for provider, scenario in test_plan:
+        result = run_test(provider, scenario, keys, providers, results_dir)
+        print_test_results(result)
+
+
 def run_single_test(
     provider: str,
     scenario: str,
@@ -189,9 +211,9 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["single", "all"],
+        choices=["single", "all", "byok"],
         default="single",
-        help="Test mode: single (specific test) or all (full suite)",
+        help="Test mode: single (specific test), all (all non-BYOK tests), or byok (BYOK tests only)",
     )
     parser.add_argument(
         "--provider",
@@ -231,6 +253,8 @@ def main():
 
     if args.mode == "all":
         run_all_tests(keys, providers, results_dir)
+    elif args.mode == "byok":
+        run_byok_tests(keys, providers, results_dir)
     elif args.mode == "single":
         if not args.provider or not args.scenario:
             print("Error: --provider and --scenario required for single mode")
