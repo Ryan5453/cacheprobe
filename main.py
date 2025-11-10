@@ -145,7 +145,9 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
             break
 
 
-def run_byok_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir: Path):
+def run_byok_tests(
+    keys: dict[str, dict], providers: dict[str, dict], results_dir: Path
+):
     """
     Run BYOK (Bring Your Own Key) test suite.
 
