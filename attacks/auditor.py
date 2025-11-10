@@ -1,12 +1,20 @@
 import time
 import random
 import string
+from enum import Enum
 import numpy as np
 from scipy import stats
 from sklearn.metrics import precision_recall_curve, auc
 from openai import OpenAI
 
-from attacks.models import ScenarioType
+
+class ScenarioType(str, Enum):
+    DIRECT_SAME = "direct_same_account"
+    DIRECT_CROSS = "direct_cross_account"
+    OR_DEFAULT_SAME = "openrouter_default_same_account"
+    OR_DEFAULT_CROSS = "openrouter_default_cross_account"
+    OR_BYOK_SAME = "openrouter_byok_same_account"
+    OR_BYOK_CROSS = "openrouter_byok_cross_account"
 
 
 class CachingAuditor:
@@ -44,13 +52,17 @@ class CachingAuditor:
 
     def generate_random_prompt(self, length: int) -> str:
         """
-        Generate random letter prompt separated by spaces.
+        Generate a prompt containing {length} tokens
 
-        :param length: Number of random letters to generate
-        :return: Space-separated string of random letters
+        Functionally, this works as generating length amount of tokens 
+        most tokenizers have every letter prefixed with a space as 
+        a valid token.
+
+        :param length: Number of tokens to generate
+        :return: String of random tokens
         """
-        letters = [random.choice(string.ascii_letters) for _ in range(length)]
-        return " ".join(letters)
+        tokens = [random.choice(string.ascii_letters) for _ in range(length)]
+        return " ".join(tokens)
 
     def generate_prefix_prompt(self, base_prompt: str, prefix_fraction: float) -> str:
         """
@@ -73,7 +85,7 @@ class CachingAuditor:
         """
         Send prompt and measure Time To First Token.
 
-        :param prompt: The prompt to send to the LLM API
+        :param prompt: The prompt to send to the Inference API
         :return: Time to first token in seconds
         """
         start_time = time.time()
