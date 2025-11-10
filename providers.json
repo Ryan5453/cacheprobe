@@ -9,8 +9,10 @@
     },
     "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 2048,
-    "prefix_fraction": 0.95
+    "prompt_length": 4096,
+    "prefix_fraction": 0.95,
+    "delay_between_requests": 0.5,
+    "max_retries": 5
   },
   "fireworks": {
     "direct": {
@@ -22,8 +24,10 @@
     },
     "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 2048,
-    "prefix_fraction": 0.95
+    "prompt_length": 4096,
+    "prefix_fraction": 0.95,
+    "delay_between_requests": 0.5,
+    "max_retries": 5
   },
   "openai": {
     "direct": {
@@ -35,8 +39,10 @@
     },
     "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 2048,
-    "prefix_fraction": 0.95
+    "prompt_length": 4096,
+    "prefix_fraction": 0.95,
+    "delay_between_requests": 1.0,
+    "max_retries": 5
   }
 }
 

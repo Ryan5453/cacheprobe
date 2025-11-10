@@ -4,7 +4,7 @@ import time
 from enum import Enum
 
 import numpy as np
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from scipy import stats
 from sklearn.metrics import auc, precision_recall_curve
 
@@ -39,6 +39,8 @@ class CachingAuditor:
         self.scenario = scenario
         self.prompt_length = config["prompt_length"]
         self.prefix_fraction = config["prefix_fraction"]
+        self.delay_between_requests = config.get("delay_between_requests", 0.5)
+        self.max_retries = config.get("max_retries", 5)
 
         if scenario.value.startswith("openrouter"):
             self.client = OpenAI(
@@ -84,13 +86,11 @@ class CachingAuditor:
 
     def measure_ttft(self, prompt: str) -> float:
         """
-        Send prompt and measure Time To First Token.
+        Send prompt and measure Time To First Token with retry logic.
 
         :param prompt: The prompt to send to the Inference API
         :return: Time to first token in seconds
         """
-        start_time = time.time()
-
         kwargs = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -108,10 +108,21 @@ class CachingAuditor:
                 }
             }
 
-        self.client.chat.completions.create(**kwargs)
-        end_time = time.time()
+        for attempt in range(self.max_retries):
+            try:
+                start_time = time.time()
+                self.client.chat.completions.with_raw_response.create(**kwargs)
+                end_time = time.time()
+                return end_time - start_time
+            except RateLimitError as e:
+                if attempt == self.max_retries - 1:
+                    raise
 
-        return end_time - start_time
+                retry_after = e.response.headers.get("retry-after")
+                wait_time = float(retry_after) + 1 if retry_after else 2**attempt
+                time.sleep(wait_time)
+
+        return 0.0
 
     def cache_miss_procedure(self) -> list[float]:
         """
@@ -126,6 +137,9 @@ class CachingAuditor:
             prompt = self.generate_random_prompt(self.prompt_length)
             timing = self.measure_ttft(prompt)
             miss_times.append(timing)
+
+            if i < num_samples - 1:
+                time.sleep(self.delay_between_requests)
 
         return miss_times
 
@@ -142,8 +156,11 @@ class CachingAuditor:
         for i in range(num_samples):
             base_prompt = self.generate_random_prompt(self.prompt_length)
 
-            for _ in range(num_victim_requests):
+            for j in range(num_victim_requests):
                 self.measure_ttft(base_prompt)
+                if j < num_victim_requests - 1:
+                    time.sleep(self.delay_between_requests)
+
             if self.prefix_fraction == 1.0:
                 test_prompt = base_prompt
             else:
@@ -153,6 +170,9 @@ class CachingAuditor:
 
             timing = self.measure_ttft(test_prompt)
             hit_times.append(timing)
+
+            if i < num_samples - 1:
+                time.sleep(self.delay_between_requests)
 
         return hit_times
 
