@@ -1,11 +1,12 @@
-import time
 import random
 import string
+import time
 from enum import Enum
+
 import numpy as np
-from scipy import stats
-from sklearn.metrics import precision_recall_curve, auc
 from openai import OpenAI
+from scipy import stats
+from sklearn.metrics import auc, precision_recall_curve
 
 
 class ScenarioType(str, Enum):
@@ -54,8 +55,8 @@ class CachingAuditor:
         """
         Generate a prompt containing {length} tokens
 
-        Functionally, this works as generating length amount of tokens 
-        most tokenizers have every letter prefixed with a space as 
+        Functionally, this works as generating length amount of tokens
+        most tokenizers have every letter prefixed with a space as
         a valid token.
 
         :param length: Number of tokens to generate

@@ -16,9 +16,7 @@ def load_keys(keys_file: str = "keys.yaml") -> dict[str, dict]:
     """
     keys_path = Path(keys_file)
     if not keys_path.exists():
-        raise FileNotFoundError(
-            f"Keys file '{keys_file}' not found."
-        )
+        raise FileNotFoundError(f"Keys file '{keys_file}' not found.")
     with open(keys_path) as f:
         return yaml.safe_load(f)
 
@@ -53,7 +51,7 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
 
     with open(filepath, "w") as f:
         json.dump(result, f, indent=2)
-        
+
     print(f"Results saved to: {filepath}")
 
 
