@@ -1,0 +1,92 @@
+\documentclass[11pt,letterpaper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\title{OpenRouter: Prompt Caching Isolation}
+
+\author{
+    Ryan Fahey\\
+    \texttt{fahey.rya@northeastern.edu} \\ 
+    Northeastern University
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees. LLM providers implement per-account or per-organization prompt caching to prevent timing attacks, but does routing through OpenRouter with shared organizational credentials inadvertently creates global cache sharing across all OpenRouter users?
+
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+
+\section{Background}
+\label{sec:background}
+
+\subsection{Prompt Caching in LLM APIs}
+
+\subsection{Timing Side-Channel Attacks}
+
+\subsection{OpenRouter Architecture}
+
+\section{Threat Model}
+\label{sec:threat-model}
+
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Statistical Hypothesis Testing}
+
+\subsection{Experimental Procedures}
+
+\subsection{Test Scenarios}
+
+\subsection{Metrics and Statistical Tests}
+
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Provider Selection}
+
+\subsection{Implementation}
+
+\section{Results}
+\label{sec:results}
+
+
+
+\section{Discussion}
+\label{sec:discussion}
+
+\section{Related Work}
+\label{sec:related}
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+\newpage
+
+
+\begin{thebibliography}{9}
+
+\bibitem{gu2025auditing}
+Chenchen Gu, Xiang Lisa Li, Rohith Kuditipudi, Percy Liang, and Tatsunori Hashimoto.
+\textit{Auditing Prompt Caching in Language Model APIs}.
+arXiv preprint arXiv:2502.07776, 2025.
+\url{https://arxiv.org/pdf/2502.07776}
+
+\end{thebibliography}
+
+\end{document}
+
