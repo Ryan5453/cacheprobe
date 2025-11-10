@@ -90,7 +90,7 @@ class CachingAuditor:
         if self.use_provider_control:
             kwargs["extra_body"] = {
                 "provider": {
-                    "order": [self.config["openrouter"]["provider_slug"]],
+                    "order": [self.provider_name],
                     "allow_fallbacks": False,
                 }
             }
@@ -131,7 +131,6 @@ class CachingAuditor:
 
             for _ in range(num_victim_requests):
                 self.measure_ttft(base_prompt)
-
             if self.prefix_fraction == 1.0:
                 test_prompt = base_prompt
             else:
@@ -155,11 +154,7 @@ class CachingAuditor:
         :param miss_times: Response times for cache miss scenarios
         :return: Tuple of (KS statistic, p-value)
         """
-        statistic, pvalue = stats.ks_2samp(
-            hit_times,
-            miss_times,
-            alternative="less",  # hit_times SHOULD be less than miss_times
-        )
+        statistic, pvalue = stats.ks_2samp(hit_times, miss_times)
         return statistic, pvalue
 
     @staticmethod

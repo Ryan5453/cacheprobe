@@ -136,7 +136,6 @@ class AuditRunner:
             return json.load(f)
 
 
-
 def run_all_tests(keys: dict[str, dict], providers: dict[str, dict]):
     """
     Run the complete test suite.
@@ -207,24 +206,30 @@ def run_single_test(
 
     result = runner.run_test(provider, scenario_type, keys)
     print(f"\nTest completed!")
-    
+
     # Show detection results
-    detected_caching = result.get('detected_caching', result['p_value'] < 1e-8)
+    detected_caching = result.get("detected_caching", result["p_value"] < 1e-8)
     print(f"Caching detected: {detected_caching}")
-    
-    if 'detected_caching_timing' in result:
+
+    if "detected_caching_timing" in result:
         print(f"  - Timing-based detection: {result['detected_caching_timing']}")
-    if 'detected_caching_provider' in result:
+    if "detected_caching_provider" in result:
         print(f"  - Provider-reported detection: {result['detected_caching_provider']}")
-    
-    if 'cache_stats' in result:
-        stats = result['cache_stats']
+
+    if "cache_stats" in result:
+        stats = result["cache_stats"]
         print(f"\nCache Statistics:")
-        print(f"  - Requests with cached tokens (hit): {stats['hit_requests_with_cache']}/{stats['total_hit_requests']}")
-        print(f"  - Requests with cached tokens (miss): {stats['miss_requests_with_cache']}/{stats['total_miss_requests']}")
-        if stats['avg_cached_tokens_hits'] > 0:
-            print(f"  - Average cached tokens (hits): {stats['avg_cached_tokens_hits']:.0f}")
-            print(f"  - Cache hit rate: {stats['cache_hit_rate']*100:.1f}%")
+        print(
+            f"  - Requests with cached tokens (hit): {stats['hit_requests_with_cache']}/{stats['total_hit_requests']}"
+        )
+        print(
+            f"  - Requests with cached tokens (miss): {stats['miss_requests_with_cache']}/{stats['total_miss_requests']}"
+        )
+        if stats["avg_cached_tokens_hits"] > 0:
+            print(
+                f"  - Average cached tokens (hits): {stats['avg_cached_tokens_hits']:.0f}"
+            )
+            print(f"  - Cache hit rate: {stats['cache_hit_rate'] * 100:.1f}%")
 
 
 def main():

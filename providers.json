@@ -5,12 +5,11 @@
       "base_url": "https://api.groq.com/openai/v1"
     },
     "openrouter": {
-      "model": "openai/gpt-oss-20b",
-      "provider_slug": "groq"
+      "model": "openai/gpt-oss-20b"
     },
-    "num_samples": 100,
+    "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 1024,
+    "prompt_length": 2048,
     "prefix_fraction": 0.95
   },
   "fireworks": {
@@ -19,12 +18,11 @@
       "base_url": "https://api.fireworks.ai/inference/v1"
     },
     "openrouter": {
-      "model": "qwen/qwen3-8b",
-      "provider_slug": "fireworks"
+      "model": "qwen/qwen3-8b"
     },
     "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 1024,
+    "prompt_length": 2048,
     "prefix_fraction": 0.95
   },
   "openai": {
@@ -33,12 +31,11 @@
       "base_url": "https://api.openai.com/v1"
     },
     "openrouter": {
-      "model": "openai/gpt-4.1-nano",
-      "provider_slug": "openai"
+      "model": "openai/gpt-4.1-nano"
     },
     "num_samples": 250,
     "num_victim_requests": 1,
-    "prompt_length": 1024,
+    "prompt_length": 2048,
     "prefix_fraction": 0.95
   }
 }
