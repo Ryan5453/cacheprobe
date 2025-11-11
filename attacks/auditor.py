@@ -84,12 +84,12 @@ class CachingAuditor:
 
         return " ".join(prefix + new_suffix)
 
-    def measure_ttft(self, prompt: str) -> float:
+    def measure_ttft(self, prompt: str) -> tuple[float, dict | None]:
         """
         Send prompt and measure Time To First Token with retry logic.
 
         :param prompt: The prompt to send to the Inference API
-        :return: Time to first token in seconds
+        :return: Tuple of (time to first token in seconds, usage dict or None)
         """
         kwargs = {
             "model": self.model,
@@ -111,9 +111,13 @@ class CachingAuditor:
         for attempt in range(self.max_retries):
             try:
                 start_time = time.time()
-                self.client.chat.completions.with_raw_response.create(**kwargs)
+                raw_response = self.client.chat.completions.with_raw_response.create(**kwargs)
                 end_time = time.time()
-                return end_time - start_time
+                
+                completion = raw_response.parse()
+                usage = completion.usage.model_dump() if completion.usage else None
+                
+                return end_time - start_time, usage
             except RateLimitError as e:
                 if attempt == self.max_retries - 1:
                     raise
@@ -122,9 +126,9 @@ class CachingAuditor:
                 wait_time = float(retry_after) + 1 if retry_after else 2**attempt
                 time.sleep(wait_time)
 
-        return 0.0
+        return 0.0, None
 
-    def interleaved_procedure(self) -> tuple[list[float], list[float]]:
+    def interleaved_procedure(self) -> tuple[list[float], list[float], list[dict | None], list[dict | None]]:
         """
         Run interleaved miss/hit tests to reduce temporal variance.
         
@@ -133,10 +137,12 @@ class CachingAuditor:
         network conditions, etc.). This reduces systematic differences
         that could be mistaken for caching effects.
 
-        :return: Tuple of (miss_times, hit_times)
+        :return: Tuple of (miss_times, hit_times, miss_usage, hit_usage)
         """
         miss_times = []
         hit_times = []
+        miss_usage = []
+        hit_usage = []
 
         num_samples = self.config["num_samples"]
         num_victim_requests = self.config["num_victim_requests"]
@@ -146,8 +152,9 @@ class CachingAuditor:
                 print(f"  Progress: {i + 1}/{num_samples} pairs completed")
             
             miss_prompt = self.generate_random_prompt(self.prompt_length)
-            miss_timing = self.measure_ttft(miss_prompt)
+            miss_timing, miss_usage_data = self.measure_ttft(miss_prompt)
             miss_times.append(miss_timing)
+            miss_usage.append(miss_usage_data)
             
             time.sleep(self.delay_between_requests)
             
@@ -165,13 +172,14 @@ class CachingAuditor:
                     hit_base_prompt, self.prefix_fraction
                 )
             
-            hit_timing = self.measure_ttft(hit_test_prompt)
+            hit_timing, hit_usage_data = self.measure_ttft(hit_test_prompt)
             hit_times.append(hit_timing)
+            hit_usage.append(hit_usage_data)
             
             if i < num_samples - 1:
                 time.sleep(self.delay_between_requests)
         
-        return miss_times, hit_times
+        return miss_times, hit_times, miss_usage, hit_usage
 
     @staticmethod
     def compute_ks_test(
@@ -214,6 +222,55 @@ class CachingAuditor:
             "median_miss_time": float(np.median(miss_times)),
         }
 
+    def analyze_cached_tokens(
+        self,
+        hit_usage: list[dict | None], 
+        miss_usage: list[dict | None]
+    ) -> dict:
+        """
+        Analyze cached tokens in API responses to detect cache usage.
+        Only counts as a cache hit if the cached tokens match the expected
+        prefix fraction (e.g., 95% or 100% of the prefix).
+
+        :param hit_usage: Usage data for cache hit scenarios
+        :param miss_usage: Usage data for cache miss scenarios
+        :return: Dict with cache token statistics
+        """
+        def extract_cached_tokens(usage_list: list[dict | None]) -> list[int]:
+            cached = []
+            for usage in usage_list:
+                if usage and "prompt_tokens_details" in usage:
+                    details = usage["prompt_tokens_details"]
+                    if isinstance(details, dict) and "cached_tokens" in details:
+                        cached.append(details["cached_tokens"])
+                    elif hasattr(details, "cached_tokens"):
+                        cached.append(details.cached_tokens)
+            return cached
+
+        hit_cached = extract_cached_tokens(hit_usage)
+        miss_cached = extract_cached_tokens(miss_usage)
+
+        has_cache_data = len(hit_cached) > 0 or len(miss_cached) > 0
+
+        result = {
+            "has_cache_data": has_cache_data,
+            "hit_samples_with_cache_data": len(hit_cached),
+            "miss_samples_with_cache_data": len(miss_cached),
+        }
+
+        if has_cache_data:
+            threshold = int(self.prompt_length * self.prefix_fraction * 0.9)
+            
+            hit_with_cache = sum(1 for c in hit_cached if c >= threshold)
+            miss_with_cache = sum(1 for c in miss_cached if c >= threshold)
+
+            result.update({
+                "hit_cache_percentage": (hit_with_cache / len(hit_cached) * 100) if hit_cached else 0,
+                "miss_cache_percentage": (miss_with_cache / len(miss_cached) * 100) if miss_cached else 0,
+            })
+
+        return result
+
     def filter_outliers_automatic(
         self, times: list[float], method: str = "iqr", iqr_multiplier: float = 1.5
     ) -> tuple[list[float], int, float]:
@@ -245,7 +302,7 @@ class CachingAuditor:
 
         :return: Dict containing all test data and metrics
         """
-        miss_times, hit_times = self.interleaved_procedure()
+        miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
         
         original_miss_count = len(miss_times)
         original_hit_count = len(hit_times)
@@ -261,13 +318,16 @@ class CachingAuditor:
 
         metrics = self.compute_metrics(hit_times, miss_times)
 
+        cache_token_analysis = self.analyze_cached_tokens(hit_usage, miss_usage)
+
         result = {
             "miss_times": miss_times,
             "hit_times": hit_times,
             "ks_statistic": float(ks_statistic),
             "p_value": float(p_value),
-            "detected_caching": bool(p_value < 1e-8),
+            "cache_detected_by_statistical_test": bool(p_value < 1e-8),
             "metrics": metrics,
+            "cache_token_analysis": cache_token_analysis,
         }
 
         return result

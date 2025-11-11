@@ -99,24 +99,6 @@ def run_test(
     return result
 
 
-def print_test_results(result: dict):
-    """
-    Print formatted test results.
-
-    :param result: Dict containing audit results
-    """
-    detected_caching = result["detected_caching"]
-    print(f"\nTest completed! Caching detected: {detected_caching}")
-    print(f"  - p-value: {result['p_value']}")
-    print(f"  - KS statistic: {result['ks_statistic']}")
-
-    metrics = result["metrics"]
-    print(f"\nTiming Statistics:")
-    print(f"  - Mean hit time: {metrics['mean_hit_time']}s")
-    print(f"  - Mean miss time: {metrics['mean_miss_time']}s")
-    print(f"  - Speedup: {metrics['mean_miss_time'] / metrics['mean_hit_time']}x")
-
-
 def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir: Path):
     """
     Run the complete test suite.
@@ -139,7 +121,7 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
     for provider, scenario in test_plan:
         result = run_test(provider, scenario, keys, providers, results_dir)
 
-        if scenario == ScenarioType.DIRECT_SAME and not result["detected_caching"]:
+        if scenario == ScenarioType.DIRECT_SAME and not result["cache_detected_by_statistical_test"]:
             print(f"WARNING: No caching detected for {provider}")
             print("Skipping remaining tests for this provider")
             break
@@ -166,7 +148,6 @@ def run_byok_tests(
 
     for provider, scenario in test_plan:
         result = run_test(provider, scenario, keys, providers, results_dir)
-        print_test_results(result)
 
 
 def run_single_test(
@@ -198,7 +179,6 @@ def run_single_test(
         return
 
     result = run_test(provider, scenario_type, keys, providers, results_dir)
-    print_test_results(result)
 
 
 def main():
