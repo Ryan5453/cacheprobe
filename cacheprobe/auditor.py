@@ -332,21 +332,21 @@ class CachingAuditor:
 
         :return: Dict containing all test data and metrics
         """
-        miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
+        miss_times_raw, hit_times_raw, miss_usage, hit_usage = self.interleaved_procedure()
 
-        original_miss_count = len(miss_times)
-        original_hit_count = len(hit_times)
+        original_miss_count = len(miss_times_raw)
+        original_hit_count = len(hit_times_raw)
 
-        miss_times, miss_outliers, miss_threshold = self.filter_outliers_automatic(
-            miss_times,
+        miss_times_filtered, miss_outliers, miss_threshold = self.filter_outliers_automatic(
+            miss_times_raw,
         )
-        hit_times, hit_outliers, hit_threshold = self.filter_outliers_automatic(
-            hit_times,
+        hit_times_filtered, hit_outliers, hit_threshold = self.filter_outliers_automatic(
+            hit_times_raw,
         )
 
-        ks_statistic, p_value = self.compute_ks_test(hit_times, miss_times)
+        ks_statistic, p_value = self.compute_ks_test(hit_times_filtered, miss_times_filtered)
 
-        metrics = self.compute_metrics(hit_times, miss_times)
+        metrics = self.compute_metrics(hit_times_filtered, miss_times_filtered)
 
         cache_token_analysis = self.analyze_cached_tokens(hit_usage, miss_usage)
 
@@ -369,11 +369,13 @@ class CachingAuditor:
                 "actual_hit_count": original_hit_count,
                 "miss_outliers_removed": miss_outliers,
                 "hit_outliers_removed": hit_outliers,
-                "final_miss_count": len(miss_times),
-                "final_hit_count": len(hit_times),
+                "final_miss_count": len(miss_times_filtered),
+                "final_hit_count": len(hit_times_filtered),
             },
-            "miss_times": miss_times,
-            "hit_times": hit_times,
+            "miss_times_raw": miss_times_raw,
+            "hit_times_raw": hit_times_raw,
+            "miss_times": miss_times_filtered,
+            "hit_times": hit_times_filtered,
             "ks_statistic": float(ks_statistic),
             "p_value": float(p_value),
             "cache_detected_by_statistical_test": bool(p_value < 1e-8),

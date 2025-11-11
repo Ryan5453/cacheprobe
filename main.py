@@ -51,7 +51,7 @@ def extract_providers(config: dict[str, dict]) -> dict[str, dict]:
 
 def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir: Path):
     """
-    Save test result to JSON file.
+    Save test result to JSON file with compact formatting for numeric arrays.
 
     :param result: Dict containing audit results
     :param provider: The provider name
@@ -63,8 +63,45 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
     filename = f"{timestamp}_{provider}_{scenario.value}.json"
     filepath = results_dir / filename
 
+    def format_json(obj, indent_level=0):
+        """
+        Custom JSON formatter to keep numeric arrays on single lines.
+
+        :param obj: The object to format
+        :param indent_level: The indentation level
+        :return: The formatted JSON string
+        """
+        indent = "  " * indent_level
+        if isinstance(obj, dict):
+            lines = ["{"]
+            items = list(obj.items())
+            for i, (key, value) in enumerate(items):
+                comma = "," if i < len(items) - 1 else ""
+                if isinstance(value, (list, tuple)) and value and all(isinstance(x, (int, float)) for x in value):
+                    formatted_list = "[" + ", ".join(str(x) for x in value) + "]"
+                    lines.append(f'{indent}  "{key}": {formatted_list}{comma}')
+                elif isinstance(value, (dict, list)):
+                    lines.append(f'{indent}  "{key}": {format_json(value, indent_level + 1)}{comma}')
+                else:
+                    lines.append(f'{indent}  "{key}": {json.dumps(value)}{comma}')
+            lines.append(indent + "}")
+            return "\n".join(lines)
+        elif isinstance(obj, list):
+            if not obj:
+                return "[]"
+            if all(isinstance(x, (int, float)) for x in obj):
+                return "[" + ", ".join(str(x) for x in obj) + "]"
+            lines = ["["]
+            for i, item in enumerate(obj):
+                comma = "," if i < len(obj) - 1 else ""
+                lines.append(f"{indent}  {format_json(item, indent_level + 1)}{comma}")
+            lines.append(indent + "]")
+            return "\n".join(lines)
+        else:
+            return json.dumps(obj)
+
     with open(filepath, "w") as f:
-        json.dump(result, f, indent=2)
+        f.write(format_json(result))
 
     print(f"Results saved to: {filepath}")
 
