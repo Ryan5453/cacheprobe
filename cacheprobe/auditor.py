@@ -23,7 +23,7 @@ class CachingAuditor:
         self,
         provider_name: str,
         config: dict,
-        api_key: str,
+        keys: tuple[str, str],
         scenario: ScenarioType,
     ):
         """
@@ -31,7 +31,7 @@ class CachingAuditor:
 
         :param provider_name: The name of the LLM provider to audit
         :param config: Configuration settings for the provider
-        :param api_key: API key for authentication
+        :param keys: Tuple of API keys (keys[0] is primary, keys[1] is for cross-account)
         :param scenario: The testing scenario to execute
         """
         self.provider_name = provider_name
@@ -42,14 +42,31 @@ class CachingAuditor:
         self.delay_between_requests = config.get("delay_between_requests", 0.5)
         self.max_retries = config.get("max_retries", 5)
 
+        self.is_cross_account = "cross_account" in scenario.value
+        
+        key1 = keys[0]
+        key2 = keys[1]
+
         if scenario.value.startswith("openrouter"):
             self.client = OpenAI(
-                base_url="https://openrouter.ai/api/v1", api_key=api_key
+                base_url="https://openrouter.ai/api/v1", api_key=key1
             )
+            if self.is_cross_account and key2:
+                self.victim_client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1", api_key=key2
+                )
+            else:
+                self.victim_client = self.client
             self.model = config["openrouter"]["model"]
             self.use_provider_control = True
         else:
-            self.client = OpenAI(base_url=config["direct"]["base_url"], api_key=api_key)
+            self.client = OpenAI(base_url=config["direct"]["base_url"], api_key=key1)
+            if self.is_cross_account and key2:
+                self.victim_client = OpenAI(
+                    base_url=config["direct"]["base_url"], api_key=key2
+                )
+            else:
+                self.victim_client = self.client
             self.model = config["direct"]["model"]
             self.use_provider_control = False
 
@@ -84,13 +101,17 @@ class CachingAuditor:
 
         return " ".join(prefix + new_suffix)
 
-    def measure_ttft(self, prompt: str) -> tuple[float, dict | None]:
+    def measure_ttft(self, prompt: str, client: OpenAI | None = None) -> tuple[float, dict | None]:
         """
         Send prompt and measure Time To First Token with retry logic.
 
         :param prompt: The prompt to send to the Inference API
+        :param client: Optional OpenAI client to use (defaults to self.client)
         :return: Tuple of (time to first token in seconds, usage dict or None)
         """
+        if client is None:
+            client = self.client
+            
         kwargs = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -111,7 +132,7 @@ class CachingAuditor:
         for attempt in range(self.max_retries):
             try:
                 start_time = time.time()
-                raw_response = self.client.chat.completions.with_raw_response.create(
+                raw_response = client.chat.completions.with_raw_response.create(
                     **kwargs
                 )
                 end_time = time.time()
@@ -156,7 +177,7 @@ class CachingAuditor:
                 print(f"  Progress: {i + 1}/{num_samples} pairs completed")
 
             miss_prompt = self.generate_random_prompt(self.prompt_length)
-            miss_timing, miss_usage_data = self.measure_ttft(miss_prompt)
+            miss_timing, miss_usage_data = self.measure_ttft(miss_prompt, client=self.client)
             miss_times.append(miss_timing)
             miss_usage.append(miss_usage_data)
 
@@ -165,7 +186,7 @@ class CachingAuditor:
             hit_base_prompt = self.generate_random_prompt(self.prompt_length)
 
             for j in range(num_victim_requests):
-                self.measure_ttft(hit_base_prompt)
+                self.measure_ttft(hit_base_prompt, client=self.victim_client)
                 if j < num_victim_requests - 1:
                     time.sleep(self.delay_between_requests)
 
@@ -176,7 +197,7 @@ class CachingAuditor:
                     hit_base_prompt, self.prefix_fraction
                 )
 
-            hit_timing, hit_usage_data = self.measure_ttft(hit_test_prompt)
+            hit_timing, hit_usage_data = self.measure_ttft(hit_test_prompt, client=self.client)
             hit_times.append(hit_timing)
             hit_usage.append(hit_usage_data)
 

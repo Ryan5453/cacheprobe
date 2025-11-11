@@ -69,23 +69,21 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
     print(f"Results saved to: {filepath}")
 
 
-def get_api_key(scenario: ScenarioType, provider: str, keys: dict[str, dict]) -> str:
+def get_api_keys(scenario: ScenarioType, provider: str, keys: dict[str, list]) -> list[str]:
     """
-    Determine which API key to use based on scenario.
+    Get API keys for a scenario.
+    For OpenRouter scenarios, uses openrouter keys regardless of provider.
+    For direct scenarios, uses the provider's keys.
 
-    :param scenario: The scenario type to test
+    :param scenario: The scenario type
     :param provider: The provider name
-    :param keys: Dictionary of API keys for all providers
-    :return: The appropriate API key to use
+    :param keys: Dictionary mapping provider names to lists of API keys
+    :return: List of API keys
     """
     if scenario.value.startswith("openrouter"):
-        return keys["openrouter"][
-            "victim" if "same_account" in scenario.value else "attacker"
-        ]
+        return keys.get("openrouter", [])
     else:
-        return keys[provider][
-            "victim" if "same_account" in scenario.value else "attacker"
-        ]
+        return keys.get(provider, [])
 
 
 def run_test(
@@ -105,9 +103,13 @@ def run_test(
     :param results_dir: Directory path for storing results
     :return: Dict containing test results and metrics
     """
-    api_key = get_api_key(scenario, provider, keys)
+    provider_keys = get_api_keys(scenario, provider, keys)
     config = providers[provider]
-    auditor = CachingAuditor(provider, config, api_key, scenario)
+    
+    key1 = provider_keys[0] if len(provider_keys) > 0 else ""
+    key2 = provider_keys[1] if len(provider_keys) > 1 else ""
+    
+    auditor = CachingAuditor(provider, config, (key1, key2), scenario)
     result = auditor.run_audit()
     save_result(result, provider, scenario, results_dir)
     return result
