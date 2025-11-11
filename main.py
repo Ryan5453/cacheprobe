@@ -1,5 +1,6 @@
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -7,33 +8,45 @@ import yaml
 from attacks import CachingAuditor, ScenarioType
 
 
-def load_keys(keys_file: str = "keys.yaml") -> dict[str, dict]:
+def load_config(config_file: str = "config.yaml") -> dict[str, dict]:
     """
-    Load API keys from YAML configuration file.
+    Load configuration from YAML file.
 
-    :param keys_file: Path to the YAML file containing API keys
-    :return: Dictionary mapping provider names to API keys dict
-    """
-    keys_path = Path(keys_file)
-    if not keys_path.exists():
-        raise FileNotFoundError(f"Keys file '{keys_file}' not found.")
-    with open(keys_path) as f:
-        return yaml.safe_load(f)
-
-
-def load_providers(config_file: str = "providers.json") -> dict[str, dict]:
-    """
-    Load provider configuration from JSON file.
-
-    :param config_file: Path to the JSON file containing provider configs
-    :return: Dictionary mapping provider names to configurations
+    :param config_file: Path to the YAML file
+    :return: Configuration dictionary
     """
     config_path = Path(config_file)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file '{config_file}' not found.")
-
     with open(config_path) as f:
-        return json.load(f)
+        return yaml.safe_load(f)
+
+
+def extract_keys(config: dict[str, dict]) -> dict[str, dict]:
+    """
+    Extract API keys from unified config.
+
+    :param config: Full configuration dictionary
+    :return: Dictionary mapping provider names to their API keys
+    """
+    keys = {}
+    for provider, provider_config in config.items():
+        if "keys" in provider_config:
+            keys[provider] = provider_config["keys"]
+    return keys
+
+
+def extract_providers(config: dict[str, dict]) -> dict[str, dict]:
+    """
+    Extract provider configurations from unified config.
+
+    :param config: Full configuration dictionary
+    :return: Dictionary mapping provider names to their configuration (excluding keys)
+    """
+    providers = {}
+    for provider, provider_config in config.items():
+        providers[provider] = {k: v for k, v in provider_config.items() if k != "keys"}
+    return providers
 
 
 def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir: Path):
@@ -46,7 +59,8 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
     :param results_dir: Directory path for storing results
     """
     results_dir.mkdir(exist_ok=True)
-    filename = f"{provider}_{scenario.value}.json"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}_{provider}_{scenario.value}.json"
     filepath = results_dir / filename
 
     with open(filepath, "w") as f:
@@ -207,14 +221,9 @@ def main():
         help="Scenario for single test mode",
     )
     parser.add_argument(
-        "--keys-file",
-        default="keys.yaml",
-        help="Path to API keys YAML file (default: keys.yaml)",
-    )
-    parser.add_argument(
         "--config",
-        default="providers.json",
-        help="Path to provider configuration JSON file (default: providers.json)",
+        default="config.yaml",
+        help="Path to unified configuration YAML file (default: config.yaml)",
     )
     parser.add_argument(
         "--results-dir",
@@ -225,10 +234,14 @@ def main():
     args = parser.parse_args()
 
     try:
-        keys = load_keys(args.keys_file)
-        providers = load_providers(args.config)
+        full_config = load_config(config_file=args.config)
+        keys = extract_keys(full_config)
+        providers = extract_providers(full_config)
     except FileNotFoundError as e:
         print(f"Error: {e}")
+        return 1
+    except yaml.YAMLError as e:
+        print(f"Error parsing YAML configuration: {e}")
         return 1
 
     results_dir = Path(args.results_dir)

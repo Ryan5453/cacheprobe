@@ -117,7 +117,5 @@ dmypy.json
 cython_debug/
 
 # Project-specific
-keys.yaml
+config.yaml
 results/
-*.log
-audit.md

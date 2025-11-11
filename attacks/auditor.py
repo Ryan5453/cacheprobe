@@ -321,6 +321,27 @@ class CachingAuditor:
         cache_token_analysis = self.analyze_cached_tokens(hit_usage, miss_usage)
 
         result = {
+            "configuration": {
+                "provider": self.provider_name,
+                "scenario": self.scenario.value,
+                "model": self.model,
+                "prompt_length": self.prompt_length,
+                "prefix_fraction": self.prefix_fraction,
+                "num_samples": self.config["num_samples"],
+                "num_victim_requests": self.config["num_victim_requests"],
+                "delay_between_requests": self.delay_between_requests,
+                "max_retries": self.max_retries,
+            },
+            "counts": {
+                "expected_miss_count": self.config["num_samples"],
+                "expected_hit_count": self.config["num_samples"],
+                "actual_miss_count": original_miss_count,
+                "actual_hit_count": original_hit_count,
+                "miss_outliers_removed": miss_outliers,
+                "hit_outliers_removed": hit_outliers,
+                "final_miss_count": len(miss_times),
+                "final_hit_count": len(hit_times),
+            },
             "miss_times": miss_times,
             "hit_times": hit_times,
             "ks_statistic": float(ks_statistic),
