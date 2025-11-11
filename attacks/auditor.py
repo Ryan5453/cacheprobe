@@ -124,57 +124,54 @@ class CachingAuditor:
 
         return 0.0
 
-    def cache_miss_procedure(self) -> list[float]:
+    def interleaved_procedure(self) -> tuple[list[float], list[float]]:
         """
-        Generate cache miss times by sending random prompts.
+        Run interleaved miss/hit tests to reduce temporal variance.
+        
+        This method alternates between cache miss and cache hit tests,
+        ensuring each pair is tested under similar conditions (API load,
+        network conditions, etc.). This reduces systematic differences
+        that could be mistaken for caching effects.
 
-        :return: List of response times for cache miss scenarios
+        :return: Tuple of (miss_times, hit_times)
         """
         miss_times = []
-
-        num_samples = self.config["num_samples"]
-        for i in range(num_samples):
-            prompt = self.generate_random_prompt(self.prompt_length)
-            timing = self.measure_ttft(prompt)
-            miss_times.append(timing)
-
-            if i < num_samples - 1:
-                time.sleep(self.delay_between_requests)
-
-        return miss_times
-
-    def cache_hit_procedure(self) -> list[float]:
-        """
-        Attempt to generate cache hit times by reusing prompts.
-
-        :return: List of response times for cache hit scenarios
-        """
         hit_times = []
 
         num_samples = self.config["num_samples"]
         num_victim_requests = self.config["num_victim_requests"]
-        for i in range(num_samples):
-            base_prompt = self.generate_random_prompt(self.prompt_length)
 
+        for i in range(num_samples):
+            if (i + 1) % 50 == 0:
+                print(f"  Progress: {i + 1}/{num_samples} pairs completed")
+            
+            miss_prompt = self.generate_random_prompt(self.prompt_length)
+            miss_timing = self.measure_ttft(miss_prompt)
+            miss_times.append(miss_timing)
+            
+            time.sleep(self.delay_between_requests)
+            
+            hit_base_prompt = self.generate_random_prompt(self.prompt_length)
+            
             for j in range(num_victim_requests):
-                self.measure_ttft(base_prompt)
+                self.measure_ttft(hit_base_prompt)
                 if j < num_victim_requests - 1:
                     time.sleep(self.delay_between_requests)
-
+            
             if self.prefix_fraction == 1.0:
-                test_prompt = base_prompt
+                hit_test_prompt = hit_base_prompt
             else:
-                test_prompt = self.generate_prefix_prompt(
-                    base_prompt, self.prefix_fraction
+                hit_test_prompt = self.generate_prefix_prompt(
+                    hit_base_prompt, self.prefix_fraction
                 )
-
-            timing = self.measure_ttft(test_prompt)
-            hit_times.append(timing)
-
+            
+            hit_timing = self.measure_ttft(hit_test_prompt)
+            hit_times.append(hit_timing)
+            
             if i < num_samples - 1:
                 time.sleep(self.delay_between_requests)
-
-        return hit_times
+        
+        return miss_times, hit_times
 
     @staticmethod
     def compute_ks_test(
@@ -217,14 +214,48 @@ class CachingAuditor:
             "median_miss_time": float(np.median(miss_times)),
         }
 
+    def filter_outliers_automatic(
+        self, times: list[float], method: str = "iqr", iqr_multiplier: float = 1.5
+    ) -> tuple[list[float], int, float]:
+        """
+        Automatically filter outliers using statistical methods.
+        This uses IQR with a multiplier of 1.5 for standard outliers.
+
+        :param times: List of timing measurements
+        :return: Tuple of (filtered times, number of outliers removed, threshold used)
+        """
+        if len(times) == 0:
+            return times, 0, float('inf')
+        
+        times_array = np.array(times)
+        
+        q1 = np.percentile(times_array, 25)
+        q3 = np.percentile(times_array, 75)
+        iqr = q3 - q1
+        threshold = q3 + iqr_multiplier * iqr
+        
+        filtered = [t for t in times if t <= threshold]
+        num_removed = len(times) - len(filtered)
+        
+        return filtered, num_removed, threshold
+
     def run_audit(self) -> dict:
         """
         Run complete audit and return results.
 
         :return: Dict containing all test data and metrics
         """
-        miss_times = self.cache_miss_procedure()
-        hit_times = self.cache_hit_procedure()
+        miss_times, hit_times = self.interleaved_procedure()
+        
+        original_miss_count = len(miss_times)
+        original_hit_count = len(hit_times)
+        
+        miss_times, miss_outliers, miss_threshold = self.filter_outliers_automatic(
+            miss_times,
+        )
+        hit_times, hit_outliers, hit_threshold = self.filter_outliers_automatic(
+            hit_times,
+        )
 
         ks_statistic, p_value = self.compute_ks_test(hit_times, miss_times)
 
