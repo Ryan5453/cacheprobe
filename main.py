@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from attacks import CachingAuditor, ScenarioType
+from cacheprobe import CachingAuditor, ScenarioType
 
 
 def load_config(config_file: str = "config.yaml") -> dict[str, dict]:
@@ -135,7 +135,10 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
     for provider, scenario in test_plan:
         result = run_test(provider, scenario, keys, providers, results_dir)
 
-        if scenario == ScenarioType.DIRECT_SAME and not result["cache_detected_by_statistical_test"]:
+        if (
+            scenario == ScenarioType.DIRECT_SAME
+            and not result["cache_detected_by_statistical_test"]
+        ):
             print(f"WARNING: No caching detected for {provider}")
             print("Skipping remaining tests for this provider")
             break

@@ -111,12 +111,14 @@ class CachingAuditor:
         for attempt in range(self.max_retries):
             try:
                 start_time = time.time()
-                raw_response = self.client.chat.completions.with_raw_response.create(**kwargs)
+                raw_response = self.client.chat.completions.with_raw_response.create(
+                    **kwargs
+                )
                 end_time = time.time()
-                
+
                 completion = raw_response.parse()
                 usage = completion.usage.model_dump() if completion.usage else None
-                
+
                 return end_time - start_time, usage
             except RateLimitError as e:
                 if attempt == self.max_retries - 1:
@@ -128,10 +130,12 @@ class CachingAuditor:
 
         return 0.0, None
 
-    def interleaved_procedure(self) -> tuple[list[float], list[float], list[dict | None], list[dict | None]]:
+    def interleaved_procedure(
+        self,
+    ) -> tuple[list[float], list[float], list[dict | None], list[dict | None]]:
         """
         Run interleaved miss/hit tests to reduce temporal variance.
-        
+
         This method alternates between cache miss and cache hit tests,
         ensuring each pair is tested under similar conditions (API load,
         network conditions, etc.). This reduces systematic differences
@@ -150,35 +154,35 @@ class CachingAuditor:
         for i in range(num_samples):
             if (i + 1) % 50 == 0:
                 print(f"  Progress: {i + 1}/{num_samples} pairs completed")
-            
+
             miss_prompt = self.generate_random_prompt(self.prompt_length)
             miss_timing, miss_usage_data = self.measure_ttft(miss_prompt)
             miss_times.append(miss_timing)
             miss_usage.append(miss_usage_data)
-            
+
             time.sleep(self.delay_between_requests)
-            
+
             hit_base_prompt = self.generate_random_prompt(self.prompt_length)
-            
+
             for j in range(num_victim_requests):
                 self.measure_ttft(hit_base_prompt)
                 if j < num_victim_requests - 1:
                     time.sleep(self.delay_between_requests)
-            
+
             if self.prefix_fraction == 1.0:
                 hit_test_prompt = hit_base_prompt
             else:
                 hit_test_prompt = self.generate_prefix_prompt(
                     hit_base_prompt, self.prefix_fraction
                 )
-            
+
             hit_timing, hit_usage_data = self.measure_ttft(hit_test_prompt)
             hit_times.append(hit_timing)
             hit_usage.append(hit_usage_data)
-            
+
             if i < num_samples - 1:
                 time.sleep(self.delay_between_requests)
-        
+
         return miss_times, hit_times, miss_usage, hit_usage
 
     @staticmethod
@@ -223,9 +227,7 @@ class CachingAuditor:
         }
 
     def analyze_cached_tokens(
-        self,
-        hit_usage: list[dict | None], 
-        miss_usage: list[dict | None]
+        self, hit_usage: list[dict | None], miss_usage: list[dict | None]
     ) -> dict:
         """
         Analyze cached tokens in API responses to detect cache usage.
@@ -236,6 +238,7 @@ class CachingAuditor:
         :param miss_usage: Usage data for cache miss scenarios
         :return: Dict with cache token statistics
         """
+
         def extract_cached_tokens(usage_list: list[dict | None]) -> list[int]:
             cached = []
             for usage in usage_list:
@@ -260,14 +263,20 @@ class CachingAuditor:
 
         if has_cache_data:
             threshold = int(self.prompt_length * self.prefix_fraction * 0.9)
-            
+
             hit_with_cache = sum(1 for c in hit_cached if c >= threshold)
             miss_with_cache = sum(1 for c in miss_cached if c >= threshold)
 
-            result.update({
-                "hit_cache_percentage": (hit_with_cache / len(hit_cached) * 100) if hit_cached else 0,
-                "miss_cache_percentage": (miss_with_cache / len(miss_cached) * 100) if miss_cached else 0,
-            })
+            result.update(
+                {
+                    "hit_cache_percentage": (hit_with_cache / len(hit_cached) * 100)
+                    if hit_cached
+                    else 0,
+                    "miss_cache_percentage": (miss_with_cache / len(miss_cached) * 100)
+                    if miss_cached
+                    else 0,
+                }
+            )
 
         return result
 
@@ -282,18 +291,18 @@ class CachingAuditor:
         :return: Tuple of (filtered times, number of outliers removed, threshold used)
         """
         if len(times) == 0:
-            return times, 0, float('inf')
-        
+            return times, 0, float("inf")
+
         times_array = np.array(times)
-        
+
         q1 = np.percentile(times_array, 25)
         q3 = np.percentile(times_array, 75)
         iqr = q3 - q1
         threshold = q3 + iqr_multiplier * iqr
-        
+
         filtered = [t for t in times if t <= threshold]
         num_removed = len(times) - len(filtered)
-        
+
         return filtered, num_removed, threshold
 
     def run_audit(self) -> dict:
@@ -303,10 +312,10 @@ class CachingAuditor:
         :return: Dict containing all test data and metrics
         """
         miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
-        
+
         original_miss_count = len(miss_times)
         original_hit_count = len(hit_times)
-        
+
         miss_times, miss_outliers, miss_threshold = self.filter_outliers_automatic(
             miss_times,
         )

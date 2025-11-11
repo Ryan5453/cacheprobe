@@ -1,6 +1,6 @@
 """OpenRouter timing attack auditing toolkit."""
 
-from attacks.auditor import CachingAuditor, ScenarioType
+from cacheprobe.auditor import CachingAuditor, ScenarioType
 
 __all__ = [
     "CachingAuditor",
