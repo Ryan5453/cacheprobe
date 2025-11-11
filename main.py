@@ -140,6 +140,8 @@ def run_test(
     :param results_dir: Directory path for storing results
     :return: Dict containing test results and metrics
     """
+    print(f"\nRunning: {provider} - {scenario.value}")
+    
     provider_keys = get_api_keys(scenario, provider, keys)
     config = providers[provider]
     
@@ -171,16 +173,11 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
             ]
         )
 
-    for provider, scenario in test_plan:
+    print(f"Running {len(test_plan)} tests across {len(providers)} provider(s)")
+    
+    for idx, (provider, scenario) in enumerate(test_plan, 1):
+        print(f"\n[{idx}/{len(test_plan)}]", end=" ")
         result = run_test(provider, scenario, keys, providers, results_dir)
-
-        if (
-            scenario == ScenarioType.DIRECT_SAME
-            and not result["cache_detected_by_statistical_test"]
-        ):
-            print(f"WARNING: No caching detected for {provider}")
-            print("Skipping remaining tests for this provider")
-            break
 
 
 def run_byok_tests(
@@ -202,7 +199,10 @@ def run_byok_tests(
             ]
         )
 
-    for provider, scenario in test_plan:
+    print(f"Running {len(test_plan)} BYOK tests across {len(providers)} provider(s)")
+    
+    for idx, (provider, scenario) in enumerate(test_plan, 1):
+        print(f"\n[{idx}/{len(test_plan)}]", end=" ")
         result = run_test(provider, scenario, keys, providers, results_dir)
 
 

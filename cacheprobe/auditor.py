@@ -174,7 +174,7 @@ class CachingAuditor:
 
         for i in range(num_samples):
             if (i + 1) % 50 == 0:
-                print(f"  Progress: {i + 1}/{num_samples} pairs completed")
+                print(f"Progress: {i + 1}/{num_samples} pairs completed")
 
             miss_prompt = self.generate_random_prompt(self.prompt_length)
             miss_timing, miss_usage_data = self.measure_ttft(miss_prompt, client=self.client)
