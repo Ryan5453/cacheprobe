@@ -39,12 +39,15 @@ def extract_keys(config: dict[str, dict]) -> dict[str, dict]:
 def extract_providers(config: dict[str, dict]) -> dict[str, dict]:
     """
     Extract provider configurations from unified config.
+    Excludes 'openrouter' as it's just a key store, not a real provider.
 
     :param config: Full configuration dictionary
     :return: Dictionary mapping provider names to their configuration (excluding keys)
     """
     providers = {}
     for provider, provider_config in config.items():
+        if provider == "openrouter":
+            continue
         providers[provider] = {k: v for k, v in provider_config.items() if k != "keys"}
     return providers
 
