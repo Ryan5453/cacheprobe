@@ -301,52 +301,17 @@ class CachingAuditor:
 
         return result
 
-    def filter_outliers_automatic(
-        self, times: list[float], method: str = "iqr", iqr_multiplier: float = 1.5
-    ) -> tuple[list[float], int, float]:
-        """
-        Automatically filter outliers using statistical methods.
-        This uses IQR with a multiplier of 1.5 for standard outliers.
-
-        :param times: List of timing measurements
-        :return: Tuple of (filtered times, number of outliers removed, threshold used)
-        """
-        if len(times) == 0:
-            return times, 0, float("inf")
-
-        times_array = np.array(times)
-
-        q1 = np.percentile(times_array, 25)
-        q3 = np.percentile(times_array, 75)
-        iqr = q3 - q1
-        threshold = q3 + iqr_multiplier * iqr
-
-        filtered = [t for t in times if t <= threshold]
-        num_removed = len(times) - len(filtered)
-
-        return filtered, num_removed, threshold
-
     def run_audit(self) -> dict:
         """
         Run complete audit and return results.
 
         :return: Dict containing all test data and metrics
         """
-        miss_times_raw, hit_times_raw, miss_usage, hit_usage = self.interleaved_procedure()
+        miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
 
-        original_miss_count = len(miss_times_raw)
-        original_hit_count = len(hit_times_raw)
+        ks_statistic, p_value = self.compute_ks_test(hit_times, miss_times)
 
-        miss_times_filtered, miss_outliers, miss_threshold = self.filter_outliers_automatic(
-            miss_times_raw,
-        )
-        hit_times_filtered, hit_outliers, hit_threshold = self.filter_outliers_automatic(
-            hit_times_raw,
-        )
-
-        ks_statistic, p_value = self.compute_ks_test(hit_times_filtered, miss_times_filtered)
-
-        metrics = self.compute_metrics(hit_times_filtered, miss_times_filtered)
+        metrics = self.compute_metrics(hit_times, miss_times)
 
         cache_token_analysis = self.analyze_cached_tokens(hit_usage, miss_usage)
 
@@ -365,17 +330,11 @@ class CachingAuditor:
             "counts": {
                 "expected_miss_count": self.config["num_samples"],
                 "expected_hit_count": self.config["num_samples"],
-                "actual_miss_count": original_miss_count,
-                "actual_hit_count": original_hit_count,
-                "miss_outliers_removed": miss_outliers,
-                "hit_outliers_removed": hit_outliers,
-                "final_miss_count": len(miss_times_filtered),
-                "final_hit_count": len(hit_times_filtered),
+                "actual_miss_count": len(miss_times),
+                "actual_hit_count": len(hit_times),
             },
-            "miss_times_raw": miss_times_raw,
-            "hit_times_raw": hit_times_raw,
-            "miss_times": miss_times_filtered,
-            "hit_times": hit_times_filtered,
+            "miss_times": miss_times,
+            "hit_times": hit_times,
             "ks_statistic": float(ks_statistic),
             "p_value": float(p_value),
             "cache_detected_by_statistical_test": bool(p_value < 1e-8),
