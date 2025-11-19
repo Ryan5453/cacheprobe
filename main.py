@@ -80,11 +80,17 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
             items = list(obj.items())
             for i, (key, value) in enumerate(items):
                 comma = "," if i < len(items) - 1 else ""
-                if isinstance(value, (list, tuple)) and value and all(isinstance(x, (int, float)) for x in value):
+                if (
+                    isinstance(value, (list, tuple))
+                    and value
+                    and all(isinstance(x, (int, float)) for x in value)
+                ):
                     formatted_list = "[" + ", ".join(str(x) for x in value) + "]"
                     lines.append(f'{indent}  "{key}": {formatted_list}{comma}')
                 elif isinstance(value, (dict, list)):
-                    lines.append(f'{indent}  "{key}": {format_json(value, indent_level + 1)}{comma}')
+                    lines.append(
+                        f'{indent}  "{key}": {format_json(value, indent_level + 1)}{comma}'
+                    )
                 else:
                     lines.append(f'{indent}  "{key}": {json.dumps(value)}{comma}')
             lines.append(indent + "}")
@@ -109,7 +115,9 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
     print(f"Results saved to: {filepath}")
 
 
-def get_api_keys(scenario: ScenarioType, provider: str, keys: dict[str, list]) -> list[str]:
+def get_api_keys(
+    scenario: ScenarioType, provider: str, keys: dict[str, list]
+) -> list[str]:
     """
     Get API keys for a scenario.
     For OpenRouter scenarios, uses openrouter keys regardless of provider.
@@ -144,13 +152,13 @@ def run_test(
     :return: Dict containing test results and metrics
     """
     print(f"\nRunning: {provider} - {scenario.value}")
-    
+
     provider_keys = get_api_keys(scenario, provider, keys)
     config = providers[provider]
-    
+
     key1 = provider_keys[0] if len(provider_keys) > 0 else ""
     key2 = provider_keys[1] if len(provider_keys) > 1 else ""
-    
+
     auditor = CachingAuditor(provider, config, (key1, key2), scenario)
     result = auditor.run_audit()
     save_result(result, provider, scenario, results_dir)
@@ -177,7 +185,7 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
         )
 
     print(f"Running {len(test_plan)} tests across {len(providers)} provider(s)")
-    
+
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
         result = run_test(provider, scenario, keys, providers, results_dir)
@@ -203,7 +211,7 @@ def run_byok_tests(
         )
 
     print(f"Running {len(test_plan)} BYOK tests across {len(providers)} provider(s)")
-    
+
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
         result = run_test(provider, scenario, keys, providers, results_dir)

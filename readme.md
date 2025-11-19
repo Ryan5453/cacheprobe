@@ -22,6 +22,7 @@ groq:
   prefix_fraction: 0.95
   delay_between_requests: 0.5
   max_retries: 5
+  use_cache_keys: false
 ```
 
 

@@ -1,6 +1,7 @@
 import random
 import string
 import time
+import uuid
 from enum import Enum
 
 import numpy as np
@@ -41,16 +42,22 @@ class CachingAuditor:
         self.prefix_fraction = config["prefix_fraction"]
         self.delay_between_requests = config.get("delay_between_requests", 0.5)
         self.max_retries = config.get("max_retries", 5)
+        self.use_cache_keys = config.get("use_cache_keys", False)
 
         self.is_cross_account = "cross_account" in scenario.value
-        
+
+        if self.use_cache_keys:
+            self.attacker_cache_key = str(uuid.uuid4())
+            self.victim_cache_key = str(uuid.uuid4())
+        else:
+            self.attacker_cache_key = None
+            self.victim_cache_key = None
+
         key1 = keys[0]
         key2 = keys[1]
 
         if scenario.value.startswith("openrouter"):
-            self.client = OpenAI(
-                base_url="https://openrouter.ai/api/v1", api_key=key1
-            )
+            self.client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=key1)
             if self.is_cross_account and key2:
                 self.victim_client = OpenAI(
                     base_url="https://openrouter.ai/api/v1", api_key=key2
@@ -101,22 +108,28 @@ class CachingAuditor:
 
         return " ".join(prefix + new_suffix)
 
-    def measure_ttft(self, prompt: str, client: OpenAI | None = None) -> tuple[float, dict | None]:
+    def measure_ttft(
+        self, prompt: str, client: OpenAI | None = None, cache_key: str | None = None
+    ) -> tuple[float, dict | None]:
         """
         Send prompt and measure Time To First Token with retry logic.
 
         :param prompt: The prompt to send to the Inference API
         :param client: Optional OpenAI client to use (defaults to self.client)
+        :param cache_key: Optional prompt cache key for routing isolation
         :return: Tuple of (time to first token in seconds, usage dict or None)
         """
         if client is None:
             client = self.client
-            
+
         kwargs = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 1,
         }
+
+        if cache_key is not None:
+            kwargs["prompt_cache_key"] = cache_key
 
         # By default, OpenRouter load balances across all providers.
         # This forces it to use the specified provider so we can test prompt
@@ -177,7 +190,9 @@ class CachingAuditor:
                 print(f"Progress: {i + 1}/{num_samples} pairs completed")
 
             miss_prompt = self.generate_random_prompt(self.prompt_length)
-            miss_timing, miss_usage_data = self.measure_ttft(miss_prompt, client=self.client)
+            miss_timing, miss_usage_data = self.measure_ttft(
+                miss_prompt, client=self.client, cache_key=self.attacker_cache_key
+            )
             miss_times.append(miss_timing)
             miss_usage.append(miss_usage_data)
 
@@ -186,7 +201,11 @@ class CachingAuditor:
             hit_base_prompt = self.generate_random_prompt(self.prompt_length)
 
             for j in range(num_victim_requests):
-                self.measure_ttft(hit_base_prompt, client=self.victim_client)
+                self.measure_ttft(
+                    hit_base_prompt,
+                    client=self.victim_client,
+                    cache_key=self.victim_cache_key,
+                )
                 if j < num_victim_requests - 1:
                     time.sleep(self.delay_between_requests)
 
@@ -197,7 +216,9 @@ class CachingAuditor:
                     hit_base_prompt, self.prefix_fraction
                 )
 
-            hit_timing, hit_usage_data = self.measure_ttft(hit_test_prompt, client=self.client)
+            hit_timing, hit_usage_data = self.measure_ttft(
+                hit_test_prompt, client=self.client, cache_key=self.attacker_cache_key
+            )
             hit_times.append(hit_timing)
             hit_usage.append(hit_usage_data)
 
@@ -326,6 +347,9 @@ class CachingAuditor:
                 "num_victim_requests": self.config["num_victim_requests"],
                 "delay_between_requests": self.delay_between_requests,
                 "max_retries": self.max_retries,
+                "use_cache_keys": self.use_cache_keys,
+                "attacker_cache_key": self.attacker_cache_key,
+                "victim_cache_key": self.victim_cache_key,
             },
             "counts": {
                 "expected_miss_count": self.config["num_samples"],
