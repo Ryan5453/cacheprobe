@@ -7,8 +7,14 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{natbib}
 
-\title{CacheProbe: Auditing Prompt Cache Isolation in Inference \& Gateway APIs}
+\title{%
+\vspace{-3.5em}
+\rule{\textwidth}{0.4pt}\\[0.4em]
+CacheProbe: Auditing Prompt Cache Isolation in Gateway APIs\\[0.3em]
+\rule{\textwidth}{0.4pt}%
+}
 
 \author{
     Ryan Fahey\\
@@ -16,28 +22,75 @@
     Northeastern University
 }
 
-\date{\today}
+\date{December 6, 2025}
 
 \begin{document}
 
 \maketitle
 
+
 \begin{abstract}
-This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees. LLM providers implement per-account or per-organization prompt caching to prevent timing attacks, but does routing through OpenRouter with shared organizational credentials inadvertently creates global cache sharing across all OpenRouter users?
+
+    Over the past year, prompt caching in Large Language Models (LLMs) has become increasingly more popular across inference APIs.
+    Prompt caching helps save precious compute resources and speeds up response times by reusing parts of the KV cache of a specific prompt for another request.
+    However, many implementations of prompt caching are not secure against timing attacks or even basic metadata disclosure.
+    \citet{gu2025auditing} develops a method to be able to audit prompt caching in LLMs.
+    This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees.
+    Most LLM inference providers implement per-account or per-organization prompt caching to prevent data leaks, but does routing through OpenRouter with shared organizational credentials inadvertently create global cache sharing across all OpenRouter users?
 
 \end{abstract}
 
+
+
 \section{Introduction}
 \label{sec:introduction}
+
+The rapid growth of LLMs, both in size and in usage, has caused the compute resources needed for inference to skyrocket.
+As a result, prompt caching has become increasingly more popular across inference APIs.
+Described in \citet{gim2024promptcache}, prompt caching presents a method in which key-value attention states can be cached and reused upon an initial request to an LLM.
+Subsequent requests can use the same cached key-value attention states for portions of the prompt that are identical to the initial request.
+This allows for only the attention computations of the unique tokens in the prompt to be performed, saving compute resources and speeding up response times.
+Initial evaluations from the paper found that GPU inference was sped up by a factor of 1.5-10x while CPU inference was sped up by a factor of 20-70x.
+Prompt caching allows providers to offer significant discounts on input tokens.
+OpenAI, for example, offers an automatic 90\% discount on all cached input tokens in their most recent GPT-5 family of models on the standard tier.
+Google's Gemini 2.5 and 3.0 family of models match this discount.
+
+\vspace{1em}
+
+\noindent \citet{gu2025auditing} discovered that via timing side-channels, it is possible to detect whether or not a provider implements prompt caching (which can leak model architecture details) as well as audit the contents of the cache.
+If caches are shared across accounts, prompt caching timing signals can become a side-channel that leaks information about other users' prompts.
+Since the publication of \citet{gu2025auditing}, most inference providers have implemented per-account or per-organization prompt caching to mitigate this risk.
+However, API gateways like OpenRouter add an additional layer of abstraction to this issue.
+If OpenRouter routes its users' requests to upstream providers using shared organizational credentials, then it is possible that OpenRouter is inadvertently creating global cache sharing across all OpenRouter users.
+
+\vspace{1em}
+
+\noindent This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees --- and it finds that it \textbf{does}.
 
 \section{Background}
 \label{sec:background}
 
 \subsection{Prompt Caching in LLM APIs}
 
+During inference, transformers-based LLMs compute key-value (KV) attention states for each token in the input.
+For prompts of considerably length, this computaton adds a significant amount of latency and incurs high computational costs.
+Prompt caching largely fixes this issue by exploiting the fact that many requests (especially for multi-turn chat applications) share common prefixes and store and reuse those KV attention states.
+Inference providers check if a prefix of a prompt matches a cached entry upon receiving a request.
+If a match is found, the provider can reuse the cached KV attention states for the matching prefix and only compute the attention states for the unique tokens in the prompt.
+
 \subsection{Timing Side-Channel Attacks}
 
+The difference in latency between cache hits ans misses creates a timing side-channel.
+Attackers can measure the TTFT of a request to determine wehter or not a given prefix exists in the cache.
+By systematically probing with candidate prefixes, an attacker can reconstruct cached prompts token-by-token via binary search.
+\citet{gu2025auditing} formalizes this attack and demonstrate its feasibility across major providers
+
 \subsection{OpenRouter Architecture}
+
+OpenRouter is an API gateway that provides a unified interface for accessing infrerence APIs.
+Rather than authenticating and sending requests to individual infrerence providers, users authenticate with their OpenRotuer credentials and send their requests to OpenRouter.
+OpenRouter routes the requests to the appropriate inference provider, authenicating with their own credentials.
+From the provider's perspective, all the OpenRouter traffic is coming from a single organization, which raises questions on how the provider-level cache isolation is affected by this architecture.
 
 \section{Threat Model}
 \label{sec:threat-model}
@@ -78,15 +131,8 @@ This paper investigates whether OpenRouter's API gateway architecture introduces
 \newpage
 
 
-\begin{thebibliography}{9}
-
-\bibitem{gu2025auditing}
-Chenchen Gu, Xiang Lisa Li, Rohith Kuditipudi, Percy Liang, and Tatsunori Hashimoto.
-\textit{Auditing Prompt Caching in Language Model APIs}.
-arXiv preprint arXiv:2502.07776, 2025.
-\url{https://arxiv.org/pdf/2502.07776}
-
-\end{thebibliography}
+\bibliographystyle{plainnat}
+\bibliography{references}
 
 \end{document}
 

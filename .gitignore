@@ -118,3 +118,4 @@ cython_debug/
 
 # Project-specific
 config.yaml
+paper/figures
