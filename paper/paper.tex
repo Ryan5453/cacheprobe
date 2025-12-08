@@ -5,9 +5,11 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{natbib}
+\usepackage{float}
 
 \title{%
 \vspace{-3.5em}
@@ -181,11 +183,121 @@ This conservative approach accounts for scenarios where timing signals may be ob
 
 \subsection{Provider Selection}
 
+We selected three inference providers for evaluation: OpenAI, Groq, and Fireworks.
+These providers were chosen because they each implement organization-level prompt caching with documented isolation guarantees and are available through OpenRouter's unified API.
+
+\vspace{.5em}
+
+\noindent For each provider, we tested a single model: \texttt{gpt-4o-mini} for OpenAI, \texttt{openai/gpt-oss-20b} for Groq, and \texttt{qwen/qwen3-8b} for Fireworks.
+Model selection was constrained by OpenRouter compatibility requirements; notably, we chose \texttt{gpt-4o-mini} over newer models like \texttt{gpt-4.1-nano} because OpenRouter's routing layer does not permit \texttt{max\_tokens=1} for certain models, which complicates precise Time to First Token (TTFT) measurements.
+
 \subsection{Implementation}
+
+Our testing harness is implemented in Python using the OpenAI SDK.
+All experiments were conducted on an Ubuntu virtual machine hosted on Oracle Cloud in the US-East (Ashburn, Virginia) region to ensure consistent network conditions and eliminate variability from residential network connections.
+Experiments were conducted between November 12 and December 8, 2024.
+
+\vspace{.5em}
+
+\noindent For each provider, we collected 250 sample pairs per scenario using the interleaved procedure described in Section 4.
+Prompts consisted of 4,096 tokens with a 95\% prefix fraction, and we inserted a 500ms delay between requests to allow cache entries to persist while avoiding rate limiting.
+The complete test matrix spans six scenarios per provider, resulting in 18 distinct experimental configurations and approximately 9,000 total API requests.
 
 \section{Results}
 \label{sec:results}
 
+The following table summarizes our detection results across all provider-scenario combinations.
+We report the Kolmogorov-Smirnov statistic and p-value for timing analysis, mean TTFT for cache miss and hit conditions, and whether caching was detected via statistical analysis (p $<$ $10^{-8}$), metadata disclosure, or either method.
+
+\begin{table}[htbp]
+    \centering
+    \label{tab:results}
+    \small
+    \begin{tabular}{llccccc}
+        \toprule
+        Provider  & Scenario      & p-value  & Miss (s) & Hit (s) & Timing     & Metadata    \\
+        \midrule
+        \multicolumn{7}{l}{\textit{Direct API}}                                              \\
+        Groq      & Same Account  & 3.76e-11 & 0.460    & 0.766   & \checkmark & \checkmark  \\
+        Groq      & Cross Account & 8.30e-03 & 0.432    & 0.292   & --         & --          \\
+        Fireworks & Same Account  & 3.76e-11 & 0.445    & 0.403   & \checkmark & --          \\
+        Fireworks & Cross Account & 6.11e-01 & 0.374    & 0.379   & --         & --          \\
+        OpenAI    & Same Account  & 1.34e-01 & 0.825    & 0.784   & --         & \checkmark  \\
+        OpenAI    & Cross Account & 6.86e-01 & 0.870    & 0.900   & --         & --          \\
+        \midrule
+        \multicolumn{7}{l}{\textit{OpenRouter Default}}                                      \\
+        Groq      & Same Account  & 2.36e-03 & 0.413    & 0.351   & --         & \checkmark  \\
+        Groq      & Cross Account & 1.69e-03 & 0.396    & 0.365   & --         & \checkmark  \\
+        Fireworks & Same Account  & 3.33e-13 & 0.468    & 0.419   & \checkmark & --          \\
+        Fireworks & Cross Account & 4.08e-15 & 0.428    & 0.386   & \checkmark & --          \\
+        OpenAI    & Same Account  & 4.50e-03 & 0.940    & 0.572   & --         & \checkmark  \\
+        OpenAI    & Cross Account & 6.11e-01 & 0.574    & 0.858   & --         & \checkmark* \\
+        \midrule
+        \multicolumn{7}{l}{\textit{OpenRouter BYOK}}                                         \\
+        Groq      & Same Account  & 4.01e-01 & 0.416    & 0.405   & --         & \checkmark  \\
+        Groq      & Cross Account & 6.86e-01 & 0.429    & 0.428   & --         & --          \\
+        Fireworks & Same Account  & 3.66e-47 & 0.332    & 0.281   & \checkmark & \checkmark  \\
+        Fireworks & Cross Account & 6.11e-01 & 0.475    & 0.513   & --         & --          \\
+        OpenAI    & Same Account  & 2.88e-01 & 1.773    & 1.355   & --         & \checkmark  \\
+        OpenAI    & Cross Account & 1.64e-01 & 1.582    & 1.270   & --         & --          \\
+        \bottomrule
+    \end{tabular}
+    \vspace{0.5em}
+
+    \footnotesize
+    \textit{Timing} = Detected via KS test ($p < 10^{-8}$); \textit{Metadata} = Detected via cached\_tokens metadata.
+
+    * OpenAI cross-account shows 4.8\% cache hit rate, indicating minor leakage.
+
+
+\end{table}
+
+\subsection{Direct API Baseline}
+
+When accessing providers directly, all three providers demonstrate proper cross-account cache isolation.
+Same-account tests confirm that prompt caching is functional: Groq and Fireworks both show statistically significant timing differences (p $<$ $10^{-8}$), while OpenAI reports cached tokens via metadata disclosure.
+Cross-account tests show no evidence of cache sharing for any provider, with p-values ranging from 0.13 to 0.69 and no cross-account cached token reports.
+This establishes that the providers' native isolation mechanisms function correctly.
+
+\subsection{OpenRouter Default Mode}
+
+When routing through OpenRouter with default credentials, we observe cache sharing across accounts for all three providers.
+
+\vspace{.5em}
+
+\noindent \textbf{Groq:} While timing analysis does not reach statistical significance (p = 0.002), metadata disclosure reveals 100\% cache hit rates in both same-account and cross-account OpenRouter scenarios.
+Of the samples that reported cached token counts, all exceeded the 90\% prefix threshold in cross-account tests, indicating that prompts submitted by one OpenRouter user are being served from cache to other users.
+
+\vspace{.5em}
+
+\noindent \textbf{Fireworks:} Timing analysis provides strong evidence of cross-account cache sharing, with the OpenRouter cross-account scenario yielding p = $4.08 \times 10^{-15}$.
+This represents the most statistically significant cache sharing detection in our study.
+Fireworks does not report cached token metadata, so timing analysis is the only detection method available.
+
+\vspace{.5em}
+
+\noindent \textbf{OpenAI:} Metadata analysis reveals minor cache leakage: 4.8\% of cross-account requests report cached tokens exceeding the prefix threshold.
+While substantially lower than Groq's 100\% rate, any cross-account cache hits with randomly-generated prompts indicate that caches are not fully isolated.
+
+\subsection{OpenRouter BYOK Mode}
+
+When users supply their own provider credentials via OpenRouter's BYOK (Bring Your Own Key) feature, cache isolation is restored.
+Cross-account BYOK tests show no statistical significance (p $>$ 0.16 for all providers) and no metadata-based cache sharing.
+This confirms that the vulnerability stems from OpenRouter's use of shared organizational credentials rather than from OpenRouter's routing layer itself.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/comparison_chart.pdf}
+    \caption{Comparison of cross-account cache detection across routing configurations. Cache sharing is detected via OpenRouter default credentials but not via direct API access or BYOK mode.}
+    \label{fig:comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/metadata_disclosure_chart.pdf}
+    \caption{Metadata disclosure rates showing cached token percentages across scenarios.}
+    \label{fig:metadata}
+\end{figure}
 
 
 \section{Discussion}
@@ -200,6 +312,89 @@ This conservative approach accounts for scenarios where timing signals may be ob
 
 \newpage
 
+\appendix
+\section{Data Availability}
+\label{sec:data}
+
+The complete source code for CacheProbe, including all experimental results and raw timing data, is publicly available at \url{https://github.com/ryan5453/cacheprobe}.
+
+\section{Detailed Timing Distributions}
+\label{sec:timing-appendix}
+
+% Boxplots: 280x353 pts (ratio 1.26, tall) - 30% width, 3 per row, 2 rows = 6 per fig
+% Histograms: 425x281 pts (ratio 0.66, wide) - 45% width, 2 per row, 3 rows = 6 per fig
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_direct_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_direct_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_byok_cross_account.pdf}
+    \caption{Groq TTFT boxplots across all scenarios.}
+    \label{fig:groq-boxplots}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_direct_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_direct_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_byok_cross_account.pdf}
+    \caption{Groq TTFT histograms across all scenarios.}
+    \label{fig:groq-histograms}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_direct_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_direct_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_byok_cross_account.pdf}
+    \caption{Fireworks TTFT boxplots across all scenarios.}
+    \label{fig:fireworks-boxplots}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_direct_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_direct_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_byok_cross_account.pdf}
+    \caption{Fireworks TTFT histograms across all scenarios.}
+    \label{fig:fireworks-histograms}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_direct_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_direct_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_byok_cross_account.pdf}
+    \caption{OpenAI TTFT boxplots across all scenarios.}
+    \label{fig:openai-boxplots}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_direct_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_direct_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_byok_cross_account.pdf}
+    \caption{OpenAI TTFT histograms across all scenarios.}
+    \label{fig:openai-histograms}
+\end{figure}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
