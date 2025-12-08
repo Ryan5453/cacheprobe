@@ -31,7 +31,7 @@ CacheProbe: Auditing Prompt Cache Isolation in Gateway APIs\\[0.3em]
 
 \begin{abstract}
 
-    Over the past year, prompt caching in Large Language Models (LLMs) has become increasingly more popular across inference APIs.
+    \noindent Over the past year, prompt caching in Large Language Models (LLMs) has become increasingly more popular across inference APIs.
     Prompt caching helps save precious compute resources and speeds up response times by reusing parts of the KV cache of a specific prompt for another request.
     However, many implementations of prompt caching are not secure against timing attacks or even basic metadata disclosure.
     \citet{gu2025auditing} develops a method to be able to audit prompt caching in LLMs.
@@ -55,7 +55,7 @@ Prompt caching allows providers to offer significant discounts on input tokens.
 OpenAI, for example, offers an automatic 90\% discount on all cached input tokens in their most recent GPT-5 family of models on the standard tier.
 Google's Gemini 2.5 and 3.0 family of models match this discount.
 
-\vspace{1em}
+\vspace{.5em}
 
 \noindent \citet{gu2025auditing} discovered that via timing side-channels, it is possible to detect whether or not a provider implements prompt caching (which can leak model architecture details) as well as audit the contents of the cache.
 If caches are shared across accounts, prompt caching timing signals can become a side-channel that leaks information about other users' prompts.
@@ -63,7 +63,7 @@ Since the publication of \citet{gu2025auditing}, most inference providers have i
 However, API gateways like OpenRouter add an additional layer of abstraction to this issue.
 If OpenRouter routes its users' requests to upstream providers using shared organizational credentials, then it is possible that OpenRouter is inadvertently creating global cache sharing across all OpenRouter users.
 
-\vspace{1em}
+\vspace{.5em}
 
 \noindent This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees --- and it finds that it \textbf{does}.
 
@@ -95,16 +95,86 @@ From the provider's perspective, all the OpenRouter traffic is coming from a sin
 \section{Threat Model}
 \label{sec:threat-model}
 
+\subsection{Adversary Goals and Capabilities}
+
+We consider an adversary who is an authenticated user of OpenRouter, trying to detect or reconstruct prompts sent by other OpenRouter Users.
+The primary goal of the adversary is to determine wheter or not a specific prompt prefix exists in the inference provider's cache, which indicates that another user recently submitted a prompt with that prefix.
+If the adversary is able to detect prompt caching, it enables prompt extraction attacks as described in \citet{gu2025auditing}, where an attacker can iteratively recover cached prompts token-by-token.\subsection{OpenRouter Architecture Assumptions}
+The adversary must possess a valid OpenRouter API (with credits loaded) that will aloow them to send arbitrary prompts to the target model while measuring the TTFT of each request.
+Via OpenRouter's provider selection feature, the adversary can force their requests to be routed to a specific inference provider.
+However, the adversary does \textbf{not} need any internal access to OpenRouter's infrastructure, the victim's credentials, or the victim's account.
+
+\subsection{Attack Scenarios}
+
+We evaluate six distinct scenarios to isolate the source of any cache sharing.
+
+\begin{table}[h]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Scenario}             & \textbf{Provider Credentials Used}   \\
+        \midrule
+        Direct Same Account           & Same user key                        \\
+        Direct Cross Account          & Different user keys                  \\
+        OpenRouter Same Account       & Shared OpenRouter key                \\
+        OpenRouter Cross Account      & Shared OpenRouter key                \\
+        OpenRouter BYOK Same Account  & Same user key (via OpenRouter)       \\
+        OpenRouter BYOK Cross Account & Different user keys (via OpenRouter) \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:scenarios}
+\end{table}
+
+\subsection{Detection Methods}
+
+Our research exploits two signals to detect prompt caching.
+The first is timing side-channel analysis: cache hits result in faster TTFT since the provider can skip KV attention computation for cached prefixes.
+The second is metadata disclosure: some providers explicitly report how many tokens were served from cache via a \texttt{cached\_tokens} field in the API response.
+
 \section{Methodology}
 \label{sec:methodology}
 
-\subsection{Statistical Hypothesis Testing}
-
 \subsection{Experimental Procedures}
+
+During testing, we employed an interleaved sampling procedure that was designed to minimize any outside influence on the results, such as network latency or API load fluctuations.
+For each sample pair in \texttt{num\_samples}, we first send a unique random prompt to establish a cache miss baseline, then have a simulated victim fill the cache with a different random prompt, and finally probe with a prefix-matching prompt to test for cache hits.
+By interleaving miss and hit tests rather than batching them separately, it ensures that each pair is tested under similar conditions and any noise is duplicated within both distributions.
+
+\vspace{.5em}
+
+\noindent Prompts are generated as sequences of space-separated ASCII letters, since each letter preceded by a space constitutes a single token in most tokenizers.
+We use a prompt length of 4,096 tokens with a 95\% prefix fraction; the attacker's probe shares the first 3,891 tokens with the victim's prompt but differs in the final 205 tokens.
+This reflects real attack scenarios where an adversary attempts partial prefix reconstruction rather than exact prompt duplication.
+A 500ms delay is inserted between requests to allow cache entries to persist while avoiding rate limiting.
 
 \subsection{Test Scenarios}
 
+Each of the six scenarios described in Section 3.3 is implemented by varying the API client configuration and credential assignment.
+For direct scenarios, we instantiate OpenAI-compatible clients pointing to the provider's native endpoint with the appropriate API keys.
+Same-account tests use identical credentials for both victim and attacker roles, while cross-account tests use distinct API keys obtained from separate account registrations.
+
+\vspace{.5em}
+
+\noindent For OpenRouter scenarios, requests are routed through OpenRouter's unified endpoint with provider selection forced via the \texttt{provider.order} parameter.
+This ensures consistent routing to a single upstream provider rather than allowing OpenRouter's default load balancing across multiple providers.
+In standard OpenRouter mode, both victim and attacker authenticate with different OpenRouter API keys, but OpenRouter authenticates to the upstream provider using its own shared organizational credentials.
+In BYOK mode, users supply their own provider credentials via OpenRouter's credential management, meaning their requests authenticate to the provider under their personal accounts rather than OpenRouter's.
+
 \subsection{Metrics and Statistical Tests}
+
+We employ two complementary detection methods: timing-based statistical analysis and metadata disclosure analysis.
+For timing analysis, we use the two-sample Kolmogorov-Smirnov test to compare the TTFT distributions of cache hit and miss samples.
+Following \citet{gu2025auditing}, we use a stringent significance threshold of $p < 10^{-8}$ to minimize false positives given the inherent noise in network timing measurements.
+
+\vspace{.5em}
+\noindent For metadata analysis, we examine the \texttt{cached\_tokens} field returned in API response usage metadata.
+Some providers explicitly report how many input tokens were served from cache, providing ground-truth evidence of cache utilization independent of timing signals.
+We consider metadata-based detection positive when more than 50\% of cache-primed requests report cached tokens exceeding 90\% of the expected prefix length.
+
+\vspace{.5em}
+\noindent Our combined detection criterion considers caching detected if \textit{either} method yields a positive result.
+This conservative approach accounts for scenarios where timing signals may be obscured by network noise but metadata disclosure is present, or vice versa.
 
 \section{Experimental Setup}
 \label{sec:setup}
