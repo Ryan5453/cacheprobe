@@ -1,7 +1,7 @@
-\documentclass[11pt,letterpaper]{article}
+\documentclass[10pt,twocolumn,letterpaper]{article}
 
 \usepackage[utf8]{inputenc}
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=0.75in]{geometry}
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{amsmath}
@@ -10,6 +10,7 @@
 \usepackage{booktabs}
 \usepackage{natbib}
 \usepackage{float}
+\usepackage{placeins}
 
 \title{%
 \vspace{-3.5em}
@@ -112,17 +113,18 @@ We evaluate six distinct scenarios to isolate the source of any cache sharing.
 
 \begin{table}[h]
     \centering
-    \small
-    \begin{tabular}{ll}
+    \tiny
+    \setlength{\tabcolsep}{2pt}
+    \begin{tabular}{@{}ll@{}}
         \toprule
-        \textbf{Scenario}             & \textbf{Provider Credentials Used}   \\
+        \textbf{Scenario}     & \textbf{Credentials}        \\
         \midrule
-        Direct Same Account           & Same user key                        \\
-        Direct Cross Account          & Different user keys                  \\
-        OpenRouter Same Account       & Shared OpenRouter key                \\
-        OpenRouter Cross Account      & Shared OpenRouter key                \\
-        OpenRouter BYOK Same Account  & Same user key (via OpenRouter)       \\
-        OpenRouter BYOK Cross Account & Different user keys (via OpenRouter) \\
+        Direct Same           & Same user key               \\
+        Direct Cross          & Different user keys         \\
+        OpenRouter Same       & Shared OpenRouter key       \\
+        OpenRouter Cross      & Shared OpenRouter key       \\
+        OpenRouter BYOK Same  & User key (via OpenRouter)   \\
+        OpenRouter BYOK Cross & Diff. keys (via OpenRouter) \\
         \bottomrule
     \end{tabular}
     \label{tab:scenarios}
@@ -211,46 +213,47 @@ We report the Kolmogorov-Smirnov statistic and p-value for timing analysis, mean
 
 \begin{table}[htbp]
     \centering
+    \caption{Detection results across all provider-scenario combinations.}
     \label{tab:results}
-    \small
-    \begin{tabular}{llccccc}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{@{}llccccc@{}}
         \toprule
-        Provider  & Scenario      & p-value  & Miss (s) & Hit (s) & Timing     & Metadata    \\
+        Prov. & Acct  & p-val   & Miss & Hit  & T          & M           \\
         \midrule
-        \multicolumn{7}{l}{\textit{Direct API}}                                              \\
-        Groq      & Same Account  & 3.76e-11 & 0.460    & 0.766   & \checkmark & \checkmark  \\
-        Groq      & Cross Account & 8.30e-03 & 0.432    & 0.292   & --         & --          \\
-        Fireworks & Same Account  & 3.76e-11 & 0.445    & 0.403   & \checkmark & --          \\
-        Fireworks & Cross Account & 6.11e-01 & 0.374    & 0.379   & --         & --          \\
-        OpenAI    & Same Account  & 1.34e-01 & 0.825    & 0.784   & --         & \checkmark  \\
-        OpenAI    & Cross Account & 6.86e-01 & 0.870    & 0.900   & --         & --          \\
+        \multicolumn{7}{l}{\textit{Direct API}}                          \\
+        Groq  & Same  & 3.8e-11 & .460 & .766 & \checkmark & \checkmark  \\
+        Groq  & Cross & 8.3e-03 & .432 & .292 & --         & --          \\
+        FW    & Same  & 3.8e-11 & .445 & .403 & \checkmark & --          \\
+        FW    & Cross & 6.1e-01 & .374 & .379 & --         & --          \\
+        OAI   & Same  & 1.3e-01 & .825 & .784 & --         & \checkmark  \\
+        OAI   & Cross & 6.9e-01 & .870 & .900 & --         & --          \\
         \midrule
-        \multicolumn{7}{l}{\textit{OpenRouter Default}}                                      \\
-        Groq      & Same Account  & 2.36e-03 & 0.413    & 0.351   & --         & \checkmark  \\
-        Groq      & Cross Account & 1.69e-03 & 0.396    & 0.365   & --         & \checkmark  \\
-        Fireworks & Same Account  & 3.33e-13 & 0.468    & 0.419   & \checkmark & --          \\
-        Fireworks & Cross Account & 4.08e-15 & 0.428    & 0.386   & \checkmark & --          \\
-        OpenAI    & Same Account  & 4.50e-03 & 0.940    & 0.572   & --         & \checkmark  \\
-        OpenAI    & Cross Account & 6.11e-01 & 0.574    & 0.858   & --         & \checkmark* \\
+        \multicolumn{7}{l}{\textit{OpenRouter Default}}                  \\
+        Groq  & Same  & 2.4e-03 & .413 & .351 & --         & \checkmark  \\
+        Groq  & Cross & 1.7e-03 & .396 & .365 & --         & \checkmark  \\
+        FW    & Same  & 3.3e-13 & .468 & .419 & \checkmark & --          \\
+        FW    & Cross & 4.1e-15 & .428 & .386 & \checkmark & --          \\
+        OAI   & Same  & 4.5e-03 & .940 & .572 & --         & \checkmark  \\
+        OAI   & Cross & 6.1e-01 & .574 & .858 & --         & \checkmark* \\
         \midrule
-        \multicolumn{7}{l}{\textit{OpenRouter BYOK}}                                         \\
-        Groq      & Same Account  & 4.01e-01 & 0.416    & 0.405   & --         & \checkmark  \\
-        Groq      & Cross Account & 6.86e-01 & 0.429    & 0.428   & --         & --          \\
-        Fireworks & Same Account  & 3.66e-47 & 0.332    & 0.281   & \checkmark & \checkmark  \\
-        Fireworks & Cross Account & 6.11e-01 & 0.475    & 0.513   & --         & --          \\
-        OpenAI    & Same Account  & 2.88e-01 & 1.773    & 1.355   & --         & \checkmark  \\
-        OpenAI    & Cross Account & 1.64e-01 & 1.582    & 1.270   & --         & --          \\
+        \multicolumn{7}{l}{\textit{OpenRouter BYOK}}                     \\
+        Groq  & Same  & 4.0e-01 & .416 & .405 & --         & \checkmark  \\
+        Groq  & Cross & 6.9e-01 & .429 & .428 & --         & --          \\
+        FW    & Same  & 3.7e-47 & .332 & .281 & \checkmark & \checkmark  \\
+        FW    & Cross & 6.1e-01 & .475 & .513 & --         & --          \\
+        OAI   & Same  & 2.9e-01 & 1.77 & 1.36 & --         & \checkmark  \\
+        OAI   & Cross & 1.6e-01 & 1.58 & 1.27 & --         & --          \\
         \bottomrule
     \end{tabular}
-    \vspace{0.5em}
 
-    \footnotesize
-    \textit{Timing} = Detected via KS test ($p < 10^{-8}$); \textit{Metadata} = Detected via cached\_tokens metadata.
-
-    * OpenAI cross-account shows 4.8\% cache hit rate, indicating minor leakage.
-
-
+    \vspace{0.3em}
+    \scriptsize
+    Prov: FW=Fireworks, OAI=OpenAI. T=Timing ($p<10^{-8}$), M=Metadata.\\
+    *OAI cross-account: 4.8\% cache hit rate.
 \end{table}
+
+\FloatBarrier
 
 \subsection{Direct API Baseline}
 
@@ -285,19 +288,19 @@ When users supply their own provider credentials via OpenRouter's BYOK (Bring Yo
 Cross-account BYOK tests show no statistical significance (p $>$ 0.16 for all providers) and no metadata-based cache sharing.
 This confirms that the vulnerability stems from OpenRouter's use of shared organizational credentials rather than from OpenRouter's routing layer itself.
 
-\begin{figure}[htbp]
+\begin{figure*}[htbp]
     \centering
-    \includegraphics[width=\columnwidth]{figures/comparison_chart.pdf}
+    \includegraphics[width=0.8\textwidth]{figures/comparison_chart.pdf}
     \caption{Comparison of cross-account cache detection across routing configurations. Cache sharing is detected via OpenRouter default credentials but not via direct API access or BYOK mode.}
     \label{fig:comparison}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[htbp]
+\begin{figure*}[htbp]
     \centering
-    \includegraphics[width=\columnwidth]{figures/metadata_disclosure_chart.pdf}
+    \includegraphics[width=0.8\textwidth]{figures/metadata_disclosure_chart.pdf}
     \caption{Metadata disclosure rates showing cached token percentages across scenarios.}
     \label{fig:metadata}
-\end{figure}
+\end{figure*}
 
 
 \section{Discussion}
@@ -374,6 +377,7 @@ OpenRouter users should be aware that their prompts may be observable by other u
 Organizations handling sensitive data should consider using BYOK mode or direct provider access to maintain cache isolation.
 We recommend that OpenRouter implement per-user cache isolation mechanisms, and that providers consider offering more granular isolation options to better support multi-tenant gateway architectures.
 
+\onecolumn
 \appendix
 \section{Data Availability}
 \label{sec:data}
@@ -388,72 +392,72 @@ The complete source code for CacheProbe, including all experimental results and 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_direct_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_direct_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_groq_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_direct_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_direct_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_groq_openrouter_byok_cross_account.pdf}
     \caption{Groq TTFT boxplots across all scenarios.}
     \label{fig:groq-boxplots}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_direct_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_direct_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_groq_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_direct_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_direct_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_groq_openrouter_byok_cross_account.pdf}
     \caption{Groq TTFT histograms across all scenarios.}
     \label{fig:groq-histograms}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_direct_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_direct_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_fireworks_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_direct_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_direct_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_fireworks_openrouter_byok_cross_account.pdf}
     \caption{Fireworks TTFT boxplots across all scenarios.}
     \label{fig:fireworks-boxplots}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_direct_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_direct_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_fireworks_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_direct_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_direct_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_fireworks_openrouter_byok_cross_account.pdf}
     \caption{Fireworks TTFT histograms across all scenarios.}
     \label{fig:fireworks-histograms}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_direct_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_direct_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.30\columnwidth]{figures/boxplot_openai_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_direct_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_direct_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.30\textwidth]{figures/boxplot_openai_openrouter_byok_cross_account.pdf}
     \caption{OpenAI TTFT boxplots across all scenarios.}
     \label{fig:openai-boxplots}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_direct_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_direct_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_default_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_default_cross_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_byok_same_account.pdf}
-    \includegraphics[width=0.45\columnwidth]{figures/histogram_openai_openrouter_byok_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_direct_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_direct_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_openrouter_default_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_openrouter_default_cross_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_openrouter_byok_same_account.pdf}
+    \includegraphics[width=0.45\textwidth]{figures/histogram_openai_openrouter_byok_cross_account.pdf}
     \caption{OpenAI TTFT histograms across all scenarios.}
     \label{fig:openai-histograms}
 \end{figure}
@@ -462,4 +466,3 @@ The complete source code for CacheProbe, including all experimental results and 
 \bibliography{references}
 
 \end{document}
-
