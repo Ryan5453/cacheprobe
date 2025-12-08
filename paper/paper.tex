@@ -67,7 +67,7 @@ If OpenRouter routes its users' requests to upstream providers using shared orga
 
 \vspace{.5em}
 
-\noindent This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees --- and it finds that it \textbf{does}.
+\noindent This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees, and it finds that it \textbf{does}.
 
 \section{Background}
 \label{sec:background}
@@ -303,14 +303,76 @@ This confirms that the vulnerability stems from OpenRouter's use of shared organ
 \section{Discussion}
 \label{sec:discussion}
 
-\section{Related Work}
-\label{sec:related}
+\subsection{Security Implications}
 
+Our findings demonstrate that OpenRouter's default credential-sharing architecture effectively bypasses the per-organization cache isolation that providers have implemented.
+This creates a novel attack surface where any OpenRouter user can probe the prompt cache and potentially reconstruct prompts submitted by other users.
+The attack is particularly concerning because it requires no special access or privileges beyond a standard OpenRouter account with API credits.
+
+\vspace{.5em}
+
+\noindent Practical exploitation scenarios include system prompt extraction, where an attacker could reconstruct the system prompts of applications built on OpenRouter, potentially revealing proprietary instructions, RAG retrieval patterns, or confidential business logic.
+Additionally, usage pattern detection could allow competitors to determine whether a target organization is using specific prompts or workflows, enabling corporate espionage even without full prompt reconstruction.
+The cached prefix information could also reveal sensitive user data embedded in prompts, such as personally identifiable information or proprietary documents.
+
+\subsection{Responsibility Attribution}
+
+Our results reveal a shared responsibility gap between inference providers and API gateways.
+Providers have correctly implemented organization-level cache isolation, as evidenced by our direct API baseline tests showing no cross-account cache sharing.
+However, this isolation assumes that each organization's API credentials represent a trust boundary.
+OpenRouter's architecture violates this assumption by pooling all user traffic under shared organizational credentials.
+
+\vspace{.5em}
+
+\noindent From the provider's perspective, all OpenRouter traffic originates from a single trusted organization, making cache sharing within that traffic appear intentional.
+From OpenRouter's perspective, they are simply proxying requests and may not have visibility into how providers implement caching.
+This architectural mismatch creates a vulnerability that neither party may recognize without explicit testing.
+
+\vspace{.5em}
+
+\noindent While this paper focuses on OpenRouter, the vulnerability pattern is not unique to any single gateway.
+Any API aggregation service that proxies requests to upstream providers using shared organizational credentials could inadvertently create cross-user cache sharing.
+This includes other LLM API gateways, enterprise API management platforms, and custom proxy implementations.
+As the LLM ecosystem increasingly relies on intermediary services for routing, cost optimization, and unified API access, the cache isolation implications of shared credentials deserve broader attention.
+
+\subsection{Mitigations}
+
+The most robust mitigation would require providers to implement true per-tenant cache namespace isolation, where cache entries are explicitly partitioned by a tenant identifier rather than shared across an organization.
+OpenRouter could then forward a unique per-user identifier with each request, enabling providers to isolate caches by OpenRouter user even when all requests arrive under shared organizational credentials.
+This approach would preserve response quality and caching benefits while restoring the isolation guarantees that users expect.
+
+\vspace{.5em}
+
+\noindent Some existing mechanisms offer partial mitigation.
+OpenAI's \texttt{prompt\_cache\_key} parameter influences which cache server handles a request, so using distinct keys for different users would probabilistically reduce cache sharing by routing users to different servers.
+However, this is a routing hint rather than a true cache namespace; with a finite number of cache servers, collisions remain possible and isolation is not guaranteed.
+
+\vspace{.5em}
+
+\noindent Users concerned about prompt privacy should use OpenRouter's BYOK (Bring Your Own Key) mode, which our results confirm restores proper cache isolation.
+However, this sacrifices the convenience and pricing benefits that make OpenRouter attractive in the first place.
+
+\subsection{Limitations}
+
+Our study has several limitations that should be considered when interpreting the results.
+First, we tested only three providers and one model per provider; cache isolation behavior may vary across other providers or models available through OpenRouter.
+Second, our experiments used randomly generated prompts rather than realistic application prompts, which may not reflect typical cache hit patterns in production.
+Third, cache eviction policies and timing may vary based on provider load, time of day, or other factors we did not control for.
+Finally, our statistical thresholds, while conservative, may not capture all forms of cache leakage, particularly in cases of partial or intermittent sharing.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-\newpage
+This paper investigated whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level isolation guarantees.
+Through systematic testing across three major inference providers, we demonstrated that OpenRouter's use of shared organizational credentials enables cross-account cache sharing that would not occur when accessing providers directly.
+All three providers tested exhibited detectable cache sharing in OpenRouter's default mode, while properly isolating caches when accessed via direct API or OpenRouter's BYOK mode.
+
+\vspace{.5em}
+
+\noindent These findings have immediate practical implications.
+OpenRouter users should be aware that their prompts may be observable by other users through timing side-channels and metadata disclosure.
+Organizations handling sensitive data should consider using BYOK mode or direct provider access to maintain cache isolation.
+We recommend that OpenRouter implement per-user cache isolation mechanisms, and that providers consider offering more granular isolation options to better support multi-tenant gateway architectures.
 
 \appendix
 \section{Data Availability}
