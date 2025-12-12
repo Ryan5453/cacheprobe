@@ -107,34 +107,41 @@ The adversary must possess a valid OpenRouter API (with credits loaded) that wil
 Via OpenRouter's provider selection feature, the adversary can force their requests to be routed to a specific inference provider.
 However, the adversary does \textbf{not} need any internal access to OpenRouter's infrastructure, the victim's credentials, or the victim's account.
 
+\subsection{Detection Methods}
+
+Our research exploits two signals to detect prompt caching.
+The first is timing side-channel analysis: cache hits result in faster TTFT since the provider can skip KV attention computation for cached prefixes.
+The second is metadata disclosure: some providers explicitly report how many tokens were served from cache via a \texttt{cached\_tokens} field in the API response.
+
 \subsection{Attack Scenarios}
 
 We evaluate six distinct scenarios to isolate the source of any cache sharing.
 
 \begin{table}[h]
     \centering
-    \tiny
-    \setlength{\tabcolsep}{2pt}
-    \begin{tabular}{@{}ll@{}}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \caption{Attack Scenarios and Credential Configurations}
+    \begin{tabular}{@{}llll@{}}
         \toprule
-        \textbf{Scenario}     & \textbf{Credentials}        \\
+        \textbf{Scenario} & \textbf{Path} & \textbf{Accounts} & \textbf{Provider Creds} \\
         \midrule
-        Direct Same           & Same user key               \\
-        Direct Cross          & Different user keys         \\
-        OpenRouter Same       & Shared OpenRouter key       \\
-        OpenRouter Cross      & Shared OpenRouter key       \\
-        OpenRouter BYOK Same  & User key (via OpenRouter)   \\
-        OpenRouter BYOK Cross & Diff. keys (via OpenRouter) \\
+        Direct Same       & Direct        & Same              & Same key                \\
+        Direct Cross      & Direct        & Different         & Different keys          \\
+        \midrule
+        OR Same           & OpenRouter    & Same              & Shared (OR org)         \\
+        OR Cross          & OpenRouter    & Different         & Shared (OR org)*        \\
+        \midrule
+        OR BYOK Same      & OpenRouter    & Same              & Same BYOK               \\
+        OR BYOK Cross     & OpenRouter    & Different         & Different BYOKs         \\
         \bottomrule
     \end{tabular}
     \label{tab:scenarios}
+
+    \vspace{0.3em}
+    \scriptsize
+    OR = OpenRouter. *Hypothesized shared provider credentials.
 \end{table}
-
-\subsection{Detection Methods}
-
-Our research exploits two signals to detect prompt caching.
-The first is timing side-channel analysis: cache hits result in faster TTFT since the provider can skip KV attention computation for cached prefixes.
-The second is metadata disclosure: some providers explicitly report how many tokens were served from cache via a \texttt{cached\_tokens} field in the API response.
 
 \section{Methodology}
 \label{sec:methodology}
@@ -154,7 +161,7 @@ A 500ms delay is inserted between requests to allow cache entries to persist whi
 
 \subsection{Test Scenarios}
 
-Each of the six scenarios described in Section 3.3 is implemented by varying the API client configuration and credential assignment.
+Each of the six scenarios described in Section 3.4 is implemented by varying the API client configuration and credential assignment.
 For direct scenarios, we instantiate OpenAI-compatible clients pointing to the provider's native endpoint with the appropriate API keys.
 Same-account tests use identical credentials for both victim and attacker roles, while cross-account tests use distinct API keys obtained from separate account registrations.
 
