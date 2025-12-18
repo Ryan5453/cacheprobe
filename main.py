@@ -39,14 +39,14 @@ def extract_keys(config: dict[str, dict]) -> dict[str, dict]:
 def extract_providers(config: dict[str, dict]) -> dict[str, dict]:
     """
     Extract provider configurations from unified config.
-    Excludes 'openrouter' as it's just a key store, not a real provider.
+    Excludes 'openrouter' and 'vercel' as they are gateway key stores, not providers.
 
     :param config: Full configuration dictionary
     :return: Dictionary mapping provider names to their configuration (excluding keys)
     """
     providers = {}
     for provider, provider_config in config.items():
-        if provider == "openrouter":
+        if provider in ("openrouter", "vercel"):
             continue
         providers[provider] = {k: v for k, v in provider_config.items() if k != "keys"}
     return providers
@@ -121,6 +121,7 @@ def get_api_keys(
     """
     Get API keys for a scenario.
     For OpenRouter scenarios, uses openrouter keys regardless of provider.
+    For Vercel scenarios, uses vercel keys regardless of provider.
     For direct scenarios, uses the provider's keys.
 
     :param scenario: The scenario type
@@ -130,6 +131,8 @@ def get_api_keys(
     """
     if scenario.value.startswith("openrouter"):
         return keys.get("openrouter", [])
+    elif scenario.value.startswith("vercel"):
+        return keys.get("vercel", [])
     else:
         return keys.get(provider, [])
 
@@ -174,7 +177,7 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
     :param results_dir: Directory path for storing results
     """
     test_plan = []
-    for provider_name in providers.keys():
+    for provider_name, provider_config in providers.items():
         test_plan.extend(
             [
                 (provider_name, ScenarioType.DIRECT_SAME),
@@ -183,6 +186,14 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
                 (provider_name, ScenarioType.OR_DEFAULT_CROSS),
             ]
         )
+        # Add Vercel tests for providers that have vercel config
+        if "vercel" in provider_config:
+            test_plan.extend(
+                [
+                    (provider_name, ScenarioType.VERCEL_SAME),
+                    (provider_name, ScenarioType.VERCEL_CROSS),
+                ]
+            )
 
     print(f"Running {len(test_plan)} tests across {len(providers)} provider(s)")
 

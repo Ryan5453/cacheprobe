@@ -17,6 +17,8 @@ class ScenarioType(str, Enum):
     OR_DEFAULT_CROSS = "openrouter_default_cross_account"
     OR_BYOK_SAME = "openrouter_byok_same_account"
     OR_BYOK_CROSS = "openrouter_byok_cross_account"
+    VERCEL_SAME = "vercel_same_account"
+    VERCEL_CROSS = "vercel_cross_account"
 
 
 class CachingAuditor:
@@ -66,6 +68,19 @@ class CachingAuditor:
                 self.victim_client = self.client
             self.model = config["openrouter"]["model"]
             self.use_provider_control = True
+        elif scenario.value.startswith("vercel"):
+            self.client = OpenAI(
+                base_url="https://ai-gateway.vercel.sh/v1", api_key=key1
+            )
+            if self.is_cross_account and key2:
+                self.victim_client = OpenAI(
+                    base_url="https://ai-gateway.vercel.sh/v1", api_key=key2
+                )
+            else:
+                self.victim_client = self.client
+            # Model is under provider config, same as openrouter
+            self.model = config["vercel"]["model"]
+            self.use_provider_control = False
         else:
             self.client = OpenAI(base_url=config["direct"]["base_url"], api_key=key1)
             if self.is_cross_account and key2:

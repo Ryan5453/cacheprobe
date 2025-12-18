@@ -7,15 +7,27 @@ The goal of this research project is to investigate whether OpenRouter's API gat
 Create a `config.yaml` file with your API keys and provider configurations:
 
 ```yaml
+openrouter:
+  keys:
+    - "your-openrouter-api-key-1"
+    - "your-openrouter-api-key-2"  # For cross-account tests
+
+vercel:
+  keys:
+    - "your-ai-gateway-api-key-1"
+    - "your-ai-gateway-api-key-2"  # For cross-account tests
+
 groq:
   keys:
-    victim: "your-victim-api-key"
-    attacker: "your-attacker-api-key"
+    - "your-groq-api-key-1"
+    - "your-groq-api-key-2"  # For cross-account tests
   direct:
-    model: "openai/gpt-oss-20b"
+    model: "llama-3.3-70b-versatile"
     base_url: "https://api.groq.com/openai/v1"
   openrouter:
-    model: "openai/gpt-oss-20b"
+    model: "groq/llama-3.3-70b-versatile"
+  vercel:
+    model: "groq/llama-3.3-70b-versatile"
   num_samples: 250
   num_victim_requests: 1
   prompt_length: 4096
@@ -31,14 +43,13 @@ groq:
 Run audits using the command line:
 
 ```bash
-# This will test prompt caching for the same account for the Groq API
-uv run main.py --mode single --provider groq --scenario direct_same_account
-
-# This will test prompt caching isolation cross-account for the OpenRouter API
-uv run main.py --mode single --provider openrouter --scenario openrouter_default_cross_account
-
-# Run all non-BYOK tests
+# Run all tests (direct, OpenRouter, and Vercel for providers with vercel config)
 uv run main.py --mode all
+
+# Run a single test for a specific provider and scenario
+uv run main.py --mode single --provider groq --scenario vercel_same_account
+uv run main.py --mode single --provider groq --scenario direct_same_account
+uv run main.py --mode single --provider groq --scenario openrouter_default_cross_account
 
 # Run BYOK tests only (view note below)
 uv run main.py --mode byok
@@ -53,3 +64,4 @@ Results are saved to the `results/` directory by default.
 ## References
 
 This project is heavily inspired by the original research paper [Auditing Prompt Caching in Language Model APIs](https://arxiv.org/pdf/2502.07776) by Chenchen Gu, Xiang Lisa Li, Rohith Kuditipudi, Percy Liang, and Tatsunori Hashimoto.
+
