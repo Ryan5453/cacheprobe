@@ -366,115 +366,6 @@ def generate_metadata_chart(
     return filepath
 
 
-def generate_summary_table(
-    results: list[dict], output_path: Path, format: str = "latex"
-) -> Path:
-    rows = []
-
-    for r in results:
-        config = r["configuration"]
-        metrics = r["metrics"]
-        cache_analysis = r.get("cache_token_analysis", {})
-
-        detected_statistical = r["cache_detected_by_statistical_test"]
-
-        has_cache_data = cache_analysis.get("has_cache_data", False)
-        hit_cache_pct = cache_analysis.get("hit_cache_percentage", 0)
-        detected_metadata = has_cache_data and hit_cache_pct > 50
-
-        detected_combined = detected_statistical or detected_metadata
-
-        row = {
-            "provider": format_name(config["provider"]),
-            "scenario": format_name(config["scenario"]),
-            "ks_stat": r["ks_statistic"],
-            "p_value": r["p_value"],
-            "mean_miss": metrics["mean_miss_time"],
-            "mean_hit": metrics["mean_hit_time"],
-            "detected_statistical": detected_statistical,
-            "detected_metadata": detected_metadata,
-            "detected_combined": detected_combined,
-        }
-        rows.append(row)
-
-    if format == "latex":
-        lines = [
-            r"\begin{table}[htbp]",
-            r"\centering",
-            r"\caption{Cache Detection Results}",
-            r"\label{tab:results}",
-            r"\small",
-            r"\begin{tabular}{llcccccc}",
-            r"\toprule",
-            r"Provider & Scenario & KS Stat & p-value & Miss (s) & Hit (s) & Stat. & Meta. & Either \\",
-            r"\midrule",
-        ]
-
-        for row in rows:
-            stat = r"\checkmark" if row["detected_statistical"] else "--"
-            meta = r"\checkmark" if row["detected_metadata"] else "--"
-            combined = r"\checkmark" if row["detected_combined"] else "--"
-            scenario_short = (
-                row["scenario"]
-                .replace("Direct ", "D-")
-                .replace("Openrouter Default ", "OR-")
-                .replace("Openrouter Byok ", "BYOK-")
-                .replace(" Account", "")
-            )
-            line = (
-                f"{row['provider']} & {scenario_short} & "
-                f"{row['ks_stat']:.3f} & {row['p_value']:.2e} & "
-                f"{row['mean_miss']:.3f} & {row['mean_hit']:.3f} & "
-                f"{stat} & {meta} & {combined} \\\\"
-            )
-            lines.append(line)
-
-        lines.extend(
-            [
-                r"\bottomrule",
-                r"\end{tabular}",
-                r"\vspace{0.5em}",
-                r"\footnotesize",
-                r"\textit{Stat.} = Detected via statistical analysis (KS test, $p < 10^{-8}$); "
-                r"\textit{Meta.} = Detected via API metadata (cached\_tokens reported)",
-                r"\end{table}",
-            ]
-        )
-
-        content = "\n".join(lines)
-        filename = "summary_table.tex"
-    else:
-        lines = [
-            "| Provider | Scenario | KS Stat | p-value | Miss (s) | Hit (s) | Stat. | Meta. | Either |",
-            "|----------|----------|---------|---------|----------|---------|-------|-------|--------|",
-        ]
-
-        for row in rows:
-            stat = "✓" if row["detected_statistical"] else "—"
-            meta = "✓" if row["detected_metadata"] else "—"
-            combined = "✓" if row["detected_combined"] else "—"
-            line = (
-                f"| {row['provider']} | {row['scenario']} | "
-                f"{row['ks_stat']:.3f} | {row['p_value']:.2e} | "
-                f"{row['mean_miss']:.3f} | {row['mean_hit']:.3f} | "
-                f"{stat} | {meta} | {combined} |"
-            )
-            lines.append(line)
-
-        lines.append("")
-        lines.append(
-            "*Stat.* = Via statistical analysis (KS test, p < 1e-8); *Meta.* = Via API metadata (cached_tokens)"
-        )
-
-        content = "\n".join(lines)
-        filename = "summary_table.md"
-
-    filepath = output_path / filename
-    with open(filepath, "w") as f:
-        f.write(content)
-
-    return filepath
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -495,13 +386,7 @@ def main():
         type=Path,
         help="Multiple result files to compare",
     )
-    parser.add_argument(
-        "--table",
-        "-t",
-        nargs="+",
-        type=Path,
-        help="Generate summary table from result files",
-    )
+
     parser.add_argument(
         "--output",
         "-o",
@@ -509,18 +394,7 @@ def main():
         default=Path("paper/figures"),
         help="Output directory for generated files (default: paper/figures)",
     )
-    parser.add_argument(
-        "--format",
-        choices=["pdf", "png", "svg"],
-        default="pdf",
-        help="Output format for graphs (default: pdf)",
-    )
-    parser.add_argument(
-        "--table-format",
-        choices=["latex", "markdown"],
-        default="latex",
-        help="Output format for tables (default: latex)",
-    )
+
     parser.add_argument(
         "--all",
         "-a",
@@ -539,11 +413,11 @@ def main():
             result = json.load(f)
         print(f"Generating graphs for: {args.file.name}")
 
-        hist_path = generate_timing_histogram(result, args.output, args.format)
+        hist_path = generate_timing_histogram(result, args.output)
         print(f"  Created: {hist_path}")
         generated_files.append(hist_path)
 
-        box_path = generate_boxplot(result, args.output, args.format)
+        box_path = generate_boxplot(result, args.output)
         print(f"  Created: {box_path}")
         generated_files.append(box_path)
 
@@ -551,17 +425,10 @@ def main():
         results = [json.load(open(fp)) for fp in args.compare]
         print(f"Generating comparison chart for {len(results)} files")
 
-        chart_path = generate_comparison_chart(results, args.output, args.format)
+        chart_path = generate_comparison_chart(results, args.output)
         print(f"  Created: {chart_path}")
         generated_files.append(chart_path)
 
-    if args.table:
-        results = [json.load(open(fp)) for fp in args.table]
-        print(f"Generating summary table for {len(results)} files")
-
-        table_path = generate_summary_table(results, args.output, args.table_format)
-        print(f"  Created: {table_path}")
-        generated_files.append(table_path)
 
     if args.all:
         results_dir = Path("results")
@@ -577,27 +444,24 @@ def main():
                 result = json.load(f)
             print(f"\nGenerating graphs for: {rf.name}")
 
-            hist_path = generate_timing_histogram(result, args.output, args.format)
+            hist_path = generate_timing_histogram(result, args.output)
             print(f"  Created: {hist_path}")
             generated_files.append(hist_path)
 
-            box_path = generate_boxplot(result, args.output, args.format)
+            box_path = generate_boxplot(result, args.output)
             print(f"  Created: {box_path}")
             generated_files.append(box_path)
 
         results = [json.load(open(rf)) for rf in result_files]
 
-        chart_path = generate_comparison_chart(results, args.output, args.format)
+        chart_path = generate_comparison_chart(results, args.output)
         print(f"\nCreated comparison chart: {chart_path}")
         generated_files.append(chart_path)
 
-        metadata_path = generate_metadata_chart(results, args.output, args.format)
+        metadata_path = generate_metadata_chart(results, args.output)
         print(f"Created metadata disclosure chart: {metadata_path}")
         generated_files.append(metadata_path)
 
-        table_path = generate_summary_table(results, args.output, args.table_format)
-        print(f"Created summary table: {table_path}")
-        generated_files.append(table_path)
 
     if not generated_files:
         parser.print_help()
