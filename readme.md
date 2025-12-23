@@ -17,8 +17,8 @@ openrouter:
     - "your-openrouter-api-key-1"
     - "your-openrouter-api-key-2"  # For cross-account tests
 
-# Vercel AI Gateway was added at a later time
-# As a result, the results are not included in the paper
+# Vercel AI Gateway was added at a later time so results are not in the paper
+# It was not tested to the extent of OpenRouter, but there are a few newer result files
 vercel:
   keys:
     - "your-ai-gateway-api-key-1"
