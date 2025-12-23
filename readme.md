@@ -1,21 +1,40 @@
 # CacheProbe: Auditing Prompt Cache Isolation in Gateway APIs
 
-The goal of this research project is to investigate whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees. LLM providers (should) implement per-account or per-organization prompt caching to prevent timing attacks, but does routing through OpenRouter with shared organizational credentials inadvertently creates global cache sharing across all OpenRouter users?
+Over the past year, prompt caching in Large Language Models (LLMs) has become increasingly more popular across inference APIs.
+Prompt caching helps save precious compute resources and speeds up response times by reusing parts of the KV cache of a specific prompt for another request.
+However, many implementations of prompt caching are not secure against timing attacks or even basic metadata disclosure.
+[Gu et al.](https://arxiv.org/pdf/2502.07776) develop a method to audit prompt caching in LLMs.
+This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees.
+Most LLM inference providers implement per-account or per-organization prompt caching to prevent data leaks, but does routing through OpenRouter with shared organizational credentials inadvertently create global cache sharing across all OpenRouter users?
 
 ## Setup
 
 Create a `config.yaml` file with your API keys and provider configurations:
 
 ```yaml
+openrouter:
+  keys:
+    - "your-openrouter-api-key-1"
+    - "your-openrouter-api-key-2"  # For cross-account tests
+
+# Vercel AI Gateway was added at a later time so results are not in the paper
+# It was not tested to the extent of OpenRouter, but there are a few newer result files
+vercel:
+  keys:
+    - "your-ai-gateway-api-key-1"
+    - "your-ai-gateway-api-key-2"  # For cross-account tests
+
 groq:
   keys:
-    victim: "your-victim-api-key"
-    attacker: "your-attacker-api-key"
+    - "your-groq-api-key-1"
+    - "your-groq-api-key-2"  # For cross-account tests
   direct:
-    model: "openai/gpt-oss-20b"
+    model: "llama-3.3-70b-versatile"
     base_url: "https://api.groq.com/openai/v1"
   openrouter:
-    model: "openai/gpt-oss-20b"
+    model: "groq/llama-3.3-70b-versatile"
+  vercel:
+    model: "groq/llama-3.3-70b-versatile"
   num_samples: 250
   num_victim_requests: 1
   prompt_length: 4096
@@ -31,17 +50,16 @@ groq:
 Run audits using the command line:
 
 ```bash
-# This will test prompt caching for the same account for the Groq API
-uv run main.py --mode single --provider groq --scenario direct_same_account
+# Run all tests (direct, OpenRouter, and Vercel for providers with vercel config)
+uv run cacheprobe --mode all
 
-# This will test prompt caching isolation cross-account for the OpenRouter API
-uv run main.py --mode single --provider openrouter --scenario openrouter_default_cross_account
-
-# Run all non-BYOK tests
-uv run main.py --mode all
+# Run a single test for a specific provider and scenario
+uv run cacheprobe --mode single --provider groq --scenario vercel_same_account
+uv run cacheprobe --mode single --provider groq --scenario direct_same_account
+uv run cacheprobe --mode single --provider groq --scenario openrouter_default_cross_account
 
 # Run BYOK tests only (view note below)
-uv run main.py --mode byok
+uv run cacheprobe --mode byok
 ```
 
 Results are saved to the `results/` directory by default.
@@ -52,4 +70,4 @@ Results are saved to the `results/` directory by default.
 
 ## References
 
-This project is heavily inspired by the original research paper [Auditing Prompt Caching in Language Model APIs](https://arxiv.org/pdf/2502.07776) by Chenchen Gu, Xiang Lisa Li, Rohith Kuditipudi, Percy Liang, and Tatsunori Hashimoto.
+This project is heavily inspired by the paper [Auditing Prompt Caching in Language Model APIs](https://arxiv.org/pdf/2502.07776) by Chenchen Gu, Xiang Lisa Li, Rohith Kuditipudi, Percy Liang, and Tatsunori Hashimoto.

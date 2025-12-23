@@ -39,14 +39,14 @@ def extract_keys(config: dict[str, dict]) -> dict[str, dict]:
 def extract_providers(config: dict[str, dict]) -> dict[str, dict]:
     """
     Extract provider configurations from unified config.
-    Excludes 'openrouter' as it's just a key store, not a real provider.
+    Excludes 'openrouter' and 'vercel' as they are gateway key stores, not providers.
 
     :param config: Full configuration dictionary
     :return: Dictionary mapping provider names to their configuration (excluding keys)
     """
     providers = {}
     for provider, provider_config in config.items():
-        if provider == "openrouter":
+        if provider in ("openrouter", "vercel"):
             continue
         providers[provider] = {k: v for k, v in provider_config.items() if k != "keys"}
     return providers
@@ -116,11 +116,12 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
 
 
 def get_api_keys(
-    scenario: ScenarioType, provider: str, keys: dict[str, list]
+    scenario: ScenarioType, provider: str, keys: dict[str, dict]
 ) -> list[str]:
     """
     Get API keys for a scenario.
     For OpenRouter scenarios, uses openrouter keys regardless of provider.
+    For Vercel scenarios, uses vercel keys regardless of provider.
     For direct scenarios, uses the provider's keys.
 
     :param scenario: The scenario type
@@ -130,6 +131,8 @@ def get_api_keys(
     """
     if scenario.value.startswith("openrouter"):
         return keys.get("openrouter", [])
+    elif scenario.value.startswith("vercel"):
+        return keys.get("vercel", [])
     else:
         return keys.get(provider, [])
 
@@ -174,28 +177,40 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
     :param results_dir: Directory path for storing results
     """
     test_plan = []
-    for provider_name in providers.keys():
+    for provider_name, provider_config in providers.items():
         test_plan.extend(
             [
                 (provider_name, ScenarioType.DIRECT_SAME),
                 (provider_name, ScenarioType.DIRECT_CROSS),
-                (provider_name, ScenarioType.OR_DEFAULT_SAME),
-                (provider_name, ScenarioType.OR_DEFAULT_CROSS),
             ]
         )
+        if "openrouter" in provider_config:
+            test_plan.extend(
+                [
+                    (provider_name, ScenarioType.OR_DEFAULT_SAME),
+                    (provider_name, ScenarioType.OR_DEFAULT_CROSS),
+                ]
+            )
+        if "vercel" in provider_config:
+            test_plan.extend(
+                [
+                    (provider_name, ScenarioType.VERCEL_SAME),
+                    (provider_name, ScenarioType.VERCEL_CROSS),
+                ]
+            )
 
     print(f"Running {len(test_plan)} tests across {len(providers)} provider(s)")
 
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
-        result = run_test(provider, scenario, keys, providers, results_dir)
+        run_test(provider, scenario, keys, providers, results_dir)
 
 
-def run_byok_tests(
+def run_openrouter_byok_tests(
     keys: dict[str, dict], providers: dict[str, dict], results_dir: Path
 ):
     """
-    Run BYOK (Bring Your Own Key) test suite.
+    Run the OpenRouterBYOK (Bring Your Own Key) test suite.
 
     :param keys: Dictionary of API keys for all providers
     :param providers: Dictionary of provider configurations
@@ -214,7 +229,7 @@ def run_byok_tests(
 
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
-        result = run_test(provider, scenario, keys, providers, results_dir)
+        run_test(provider, scenario, keys, providers, results_dir)
 
 
 def run_single_test(
@@ -245,7 +260,7 @@ def run_single_test(
         print(f"\nValid scenarios: {[s.value for s in ScenarioType]}")
         return
 
-    result = run_test(provider, scenario_type, keys, providers, results_dir)
+    run_test(provider, scenario_type, keys, providers, results_dir)
 
 
 def main():
@@ -260,9 +275,9 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["single", "all", "byok"],
+        choices=["single", "all", "openrouter_byok"],
         default="single",
-        help="Test mode: single (specific test), all (all non-BYOK tests), or byok (BYOK tests only)",
+        help="Test mode: single (specific test), all (all non-BYOK tests), or openrouter_byok (BYOK tests only)",
     )
     parser.add_argument(
         "--provider",
@@ -301,8 +316,8 @@ def main():
 
     if args.mode == "all":
         run_all_tests(keys, providers, results_dir)
-    elif args.mode == "byok":
-        run_byok_tests(keys, providers, results_dir)
+    elif args.mode == "openrouter_byok":
+        run_openrouter_byok_tests(keys, providers, results_dir)
     elif args.mode == "single":
         if not args.provider or not args.scenario:
             print("Error: --provider and --scenario required for single mode")

@@ -7,6 +7,9 @@ import numpy as np
 
 
 def setup_style():
+    """
+    Configures matplotlib with specific styling.
+    """
     plt.style.use("seaborn-v0_8-whitegrid")
     plt.rcParams.update(
         {
@@ -26,6 +29,12 @@ def setup_style():
 
 
 def format_name(name: str) -> str:
+    """
+    Formats provider/scenario names for display in charts.
+
+    :param name: Raw name with underscores (e.g., "openai_direct_same_account")
+    :return: Human-readable formatted name with proper capitalization
+    """
     result = name.replace("_", " ").title()
     result = result.replace("Openai", "OpenAI")
     result = result.replace("Byok", "BYOK")
@@ -33,9 +42,18 @@ def format_name(name: str) -> str:
     return result
 
 
-def generate_timing_histogram(
-    result: dict, output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_timing_histogram(result: dict, output_path: Path) -> Path:
+    """
+    Generates a histogram comparing cache hit vs miss timing distributions.
+
+    Creates a dual-histogram overlay showing the distribution of Time To First Token
+    for both cache hit and cache miss scenarios, with median lines and statistical
+    annotations. Outliers beyond 1.5×IQR are excluded from visualization.
+
+    :param result: Audit result dict containing hit_times, miss_times, and configuration
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated histogram file
+    """
     setup_style()
 
     hit_times = np.array(result["hit_times"])
@@ -125,16 +143,26 @@ def generate_timing_histogram(
 
     provider = config["provider"]
     scenario = config["scenario"]
-    filename = f"histogram_{provider}_{scenario}.{format}"
+    filename = f"histogram_{provider}_{scenario}.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_boxplot(result: dict, output_path: Path, format: str = "pdf") -> Path:
+def generate_boxplot(result: dict, output_path: Path) -> Path:
+    """
+    Generates a boxplot comparing cache hit vs miss timing distributions.
+
+    Creates side-by-side boxplots showing the quartile distribution of TTFT
+    for hit and miss scenarios. Outliers beyond 1.5×IQR are excluded.
+
+    :param result: Audit result dict containing hit_times, miss_times, and configuration
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated boxplot file
+    """
     setup_style()
 
     hit_times = np.array(result["hit_times"])
@@ -206,18 +234,26 @@ def generate_boxplot(result: dict, output_path: Path, format: str = "pdf") -> Pa
 
     provider = config["provider"]
     scenario = config["scenario"]
-    filename = f"boxplot_{provider}_{scenario}.{format}"
+    filename = f"boxplot_{provider}_{scenario}.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_comparison_chart(
-    results: list[dict], output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_comparison_chart(results: list[dict], output_path: Path) -> Path:
+    """
+    Generates a grouped bar chart comparing timing across multiple scenarios.
+
+    Creates a chart with grouped bars showing mean TTFT with standard deviation
+    error bars for both hit and miss conditions across all provided results.
+
+    :param results: List of audit result dicts to compare
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated comparison chart file
+    """
     setup_style()
 
     labels = []
@@ -273,18 +309,26 @@ def generate_comparison_chart(
 
     plt.tight_layout()
 
-    filename = f"comparison_chart.{format}"
+    filename = "comparison_chart.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_metadata_chart(
-    results: list[dict], output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_metadata_chart(results: list[dict], output_path: Path) -> Path:
+    """
+    Generates a chart showing cache metadata disclosure rates by scenario.
+
+    Creates a grouped bar chart showing the percentage of API responses that
+    disclosed cache usage in their metadata for both hit and miss scenarios.
+
+    :param results: List of audit result dicts to analyze
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated metadata disclosure chart file
+    """
     setup_style()
 
     labels = []
@@ -357,126 +401,24 @@ def generate_metadata_chart(
 
     plt.tight_layout()
 
-    filename = f"metadata_disclosure_chart.{format}"
+    filename = "metadata_disclosure_chart.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_summary_table(
-    results: list[dict], output_path: Path, format: str = "latex"
-) -> Path:
-    rows = []
-
-    for r in results:
-        config = r["configuration"]
-        metrics = r["metrics"]
-        cache_analysis = r.get("cache_token_analysis", {})
-
-        detected_statistical = r["cache_detected_by_statistical_test"]
-
-        has_cache_data = cache_analysis.get("has_cache_data", False)
-        hit_cache_pct = cache_analysis.get("hit_cache_percentage", 0)
-        detected_metadata = has_cache_data and hit_cache_pct > 50
-
-        detected_combined = detected_statistical or detected_metadata
-
-        row = {
-            "provider": format_name(config["provider"]),
-            "scenario": format_name(config["scenario"]),
-            "ks_stat": r["ks_statistic"],
-            "p_value": r["p_value"],
-            "mean_miss": metrics["mean_miss_time"],
-            "mean_hit": metrics["mean_hit_time"],
-            "detected_statistical": detected_statistical,
-            "detected_metadata": detected_metadata,
-            "detected_combined": detected_combined,
-        }
-        rows.append(row)
-
-    if format == "latex":
-        lines = [
-            r"\begin{table}[htbp]",
-            r"\centering",
-            r"\caption{Cache Detection Results}",
-            r"\label{tab:results}",
-            r"\small",
-            r"\begin{tabular}{llcccccc}",
-            r"\toprule",
-            r"Provider & Scenario & KS Stat & p-value & Miss (s) & Hit (s) & Stat. & Meta. & Either \\",
-            r"\midrule",
-        ]
-
-        for row in rows:
-            stat = r"\checkmark" if row["detected_statistical"] else "--"
-            meta = r"\checkmark" if row["detected_metadata"] else "--"
-            combined = r"\checkmark" if row["detected_combined"] else "--"
-            scenario_short = (
-                row["scenario"]
-                .replace("Direct ", "D-")
-                .replace("Openrouter Default ", "OR-")
-                .replace("Openrouter Byok ", "BYOK-")
-                .replace(" Account", "")
-            )
-            line = (
-                f"{row['provider']} & {scenario_short} & "
-                f"{row['ks_stat']:.3f} & {row['p_value']:.2e} & "
-                f"{row['mean_miss']:.3f} & {row['mean_hit']:.3f} & "
-                f"{stat} & {meta} & {combined} \\\\"
-            )
-            lines.append(line)
-
-        lines.extend(
-            [
-                r"\bottomrule",
-                r"\end{tabular}",
-                r"\vspace{0.5em}",
-                r"\footnotesize",
-                r"\textit{Stat.} = Detected via statistical analysis (KS test, $p < 10^{-8}$); "
-                r"\textit{Meta.} = Detected via API metadata (cached\_tokens reported)",
-                r"\end{table}",
-            ]
-        )
-
-        content = "\n".join(lines)
-        filename = "summary_table.tex"
-    else:
-        lines = [
-            "| Provider | Scenario | KS Stat | p-value | Miss (s) | Hit (s) | Stat. | Meta. | Either |",
-            "|----------|----------|---------|---------|----------|---------|-------|-------|--------|",
-        ]
-
-        for row in rows:
-            stat = "✓" if row["detected_statistical"] else "—"
-            meta = "✓" if row["detected_metadata"] else "—"
-            combined = "✓" if row["detected_combined"] else "—"
-            line = (
-                f"| {row['provider']} | {row['scenario']} | "
-                f"{row['ks_stat']:.3f} | {row['p_value']:.2e} | "
-                f"{row['mean_miss']:.3f} | {row['mean_hit']:.3f} | "
-                f"{stat} | {meta} | {combined} |"
-            )
-            lines.append(line)
-
-        lines.append("")
-        lines.append(
-            "*Stat.* = Via statistical analysis (KS test, p < 1e-8); *Meta.* = Via API metadata (cached_tokens)"
-        )
-
-        content = "\n".join(lines)
-        filename = "summary_table.md"
-
-    filepath = output_path / filename
-    with open(filepath, "w") as f:
-        f.write(content)
-
-    return filepath
-
-
 def main():
+    """
+    CLI entry point for generating graphs from CacheProbe results.
+
+    Supports three modes:
+    - Single file: Generate histogram and boxplot for one result file
+    - Compare: Generate comparison chart for multiple result files
+    - All: Process all files in results/ directory and generate all chart types
+    """
     parser = argparse.ArgumentParser(
         description="Generate graphs from CacheProbe results for paper",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -495,13 +437,7 @@ def main():
         type=Path,
         help="Multiple result files to compare",
     )
-    parser.add_argument(
-        "--table",
-        "-t",
-        nargs="+",
-        type=Path,
-        help="Generate summary table from result files",
-    )
+
     parser.add_argument(
         "--output",
         "-o",
@@ -509,18 +445,7 @@ def main():
         default=Path("paper/figures"),
         help="Output directory for generated files (default: paper/figures)",
     )
-    parser.add_argument(
-        "--format",
-        choices=["pdf", "png", "svg"],
-        default="pdf",
-        help="Output format for graphs (default: pdf)",
-    )
-    parser.add_argument(
-        "--table-format",
-        choices=["latex", "markdown"],
-        default="latex",
-        help="Output format for tables (default: latex)",
-    )
+
     parser.add_argument(
         "--all",
         "-a",
@@ -539,11 +464,11 @@ def main():
             result = json.load(f)
         print(f"Generating graphs for: {args.file.name}")
 
-        hist_path = generate_timing_histogram(result, args.output, args.format)
+        hist_path = generate_timing_histogram(result, args.output)
         print(f"  Created: {hist_path}")
         generated_files.append(hist_path)
 
-        box_path = generate_boxplot(result, args.output, args.format)
+        box_path = generate_boxplot(result, args.output)
         print(f"  Created: {box_path}")
         generated_files.append(box_path)
 
@@ -551,17 +476,9 @@ def main():
         results = [json.load(open(fp)) for fp in args.compare]
         print(f"Generating comparison chart for {len(results)} files")
 
-        chart_path = generate_comparison_chart(results, args.output, args.format)
+        chart_path = generate_comparison_chart(results, args.output)
         print(f"  Created: {chart_path}")
         generated_files.append(chart_path)
-
-    if args.table:
-        results = [json.load(open(fp)) for fp in args.table]
-        print(f"Generating summary table for {len(results)} files")
-
-        table_path = generate_summary_table(results, args.output, args.table_format)
-        print(f"  Created: {table_path}")
-        generated_files.append(table_path)
 
     if args.all:
         results_dir = Path("results")
@@ -577,27 +494,23 @@ def main():
                 result = json.load(f)
             print(f"\nGenerating graphs for: {rf.name}")
 
-            hist_path = generate_timing_histogram(result, args.output, args.format)
+            hist_path = generate_timing_histogram(result, args.output)
             print(f"  Created: {hist_path}")
             generated_files.append(hist_path)
 
-            box_path = generate_boxplot(result, args.output, args.format)
+            box_path = generate_boxplot(result, args.output)
             print(f"  Created: {box_path}")
             generated_files.append(box_path)
 
         results = [json.load(open(rf)) for rf in result_files]
 
-        chart_path = generate_comparison_chart(results, args.output, args.format)
+        chart_path = generate_comparison_chart(results, args.output)
         print(f"\nCreated comparison chart: {chart_path}")
         generated_files.append(chart_path)
 
-        metadata_path = generate_metadata_chart(results, args.output, args.format)
+        metadata_path = generate_metadata_chart(results, args.output)
         print(f"Created metadata disclosure chart: {metadata_path}")
         generated_files.append(metadata_path)
-
-        table_path = generate_summary_table(results, args.output, args.table_format)
-        print(f"Created summary table: {table_path}")
-        generated_files.append(table_path)
 
     if not generated_files:
         parser.print_help()

@@ -1,5 +1,6 @@
 import random
 import string
+import subprocess
 import time
 import uuid
 from enum import Enum
@@ -13,10 +14,15 @@ from sklearn.metrics import auc, precision_recall_curve
 class ScenarioType(str, Enum):
     DIRECT_SAME = "direct_same_account"
     DIRECT_CROSS = "direct_cross_account"
+
     OR_DEFAULT_SAME = "openrouter_default_same_account"
     OR_DEFAULT_CROSS = "openrouter_default_cross_account"
+
     OR_BYOK_SAME = "openrouter_byok_same_account"
     OR_BYOK_CROSS = "openrouter_byok_cross_account"
+
+    VERCEL_SAME = "vercel_same_account"
+    VERCEL_CROSS = "vercel_cross_account"
 
 
 class CachingAuditor:
@@ -65,7 +71,21 @@ class CachingAuditor:
             else:
                 self.victim_client = self.client
             self.model = config["openrouter"]["model"]
-            self.use_provider_control = True
+            self.is_openrouter = True
+            self.is_vercel = False
+        elif scenario.value.startswith("vercel"):
+            self.client = OpenAI(
+                base_url="https://ai-gateway.vercel.sh/v1", api_key=key1
+            )
+            if self.is_cross_account and key2:
+                self.victim_client = OpenAI(
+                    base_url="https://ai-gateway.vercel.sh/v1", api_key=key2
+                )
+            else:
+                self.victim_client = self.client
+            self.model = config["vercel"]["model"]
+            self.is_openrouter = False
+            self.is_vercel = True
         else:
             self.client = OpenAI(base_url=config["direct"]["base_url"], api_key=key1)
             if self.is_cross_account and key2:
@@ -75,7 +95,8 @@ class CachingAuditor:
             else:
                 self.victim_client = self.client
             self.model = config["direct"]["model"]
-            self.use_provider_control = False
+            self.is_openrouter = False
+            self.is_vercel = False
 
     def generate_random_prompt(self, length: int) -> str:
         """
@@ -83,7 +104,8 @@ class CachingAuditor:
 
         Functionally, this works as generating length amount of tokens
         most tokenizers have every letter prefixed with a space as
-        a valid token.
+        a valid token. It's possible this could not be fully accurate
+        with some tokenizers (but we'll pretend it is).
 
         :param length: Number of tokens to generate
         :return: String of random tokens
@@ -131,14 +153,22 @@ class CachingAuditor:
         if cache_key is not None:
             kwargs["prompt_cache_key"] = cache_key
 
-        # By default, OpenRouter load balances across all providers.
-        # This forces it to use the specified provider so we can test prompt
+        # By default, gateways load balance across all providers.
+        # This forces them to use the specified provider so we can test prompt
         # caching isolation for a specific provider.
-        if self.use_provider_control:
+        if self.is_openrouter:
             kwargs["extra_body"] = {
                 "provider": {
                     "order": [self.provider_name],
                     "allow_fallbacks": False,
+                }
+            }
+        elif self.is_vercel:
+            kwargs["extra_body"] = {
+                "providerOptions": {
+                    "gateway": {
+                        "order": [self.provider_name],
+                    }
                 }
             }
 
@@ -228,20 +258,6 @@ class CachingAuditor:
         return miss_times, hit_times, miss_usage, hit_usage
 
     @staticmethod
-    def compute_ks_test(
-        hit_times: list[float], miss_times: list[float]
-    ) -> tuple[float, float]:
-        """
-        Run Kolmogorov-Smirnov test to compare timing distributions.
-
-        :param hit_times: Response times for cache hit scenarios
-        :param miss_times: Response times for cache miss scenarios
-        :return: Tuple of (KS statistic, p-value)
-        """
-        statistic, pvalue = stats.ks_2samp(hit_times, miss_times)
-        return statistic, pvalue
-
-    @staticmethod
     def compute_metrics(hit_times: list[float], miss_times: list[float]) -> dict:
         """
         Compute evaluation metrics for cache detection performance.
@@ -322,6 +338,26 @@ class CachingAuditor:
 
         return result
 
+    @staticmethod
+    def _get_git_commit() -> str | None:
+        """
+        Get the current git commit hash.
+
+        :return: Short git commit hash or None if not in a git repo
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return None
+
     def run_audit(self) -> dict:
         """
         Run complete audit and return results.
@@ -330,7 +366,7 @@ class CachingAuditor:
         """
         miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
 
-        ks_statistic, p_value = self.compute_ks_test(hit_times, miss_times)
+        ks_statistic, p_value = stats.ks_2samp(hit_times, miss_times)
 
         metrics = self.compute_metrics(hit_times, miss_times)
 
@@ -350,6 +386,7 @@ class CachingAuditor:
                 "use_cache_keys": self.use_cache_keys,
                 "attacker_cache_key": self.attacker_cache_key,
                 "victim_cache_key": self.victim_cache_key,
+                "git_commit": self._get_git_commit(),
             },
             "counts": {
                 "expected_miss_count": self.config["num_samples"],
