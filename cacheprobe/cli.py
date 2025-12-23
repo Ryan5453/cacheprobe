@@ -116,7 +116,7 @@ def save_result(result: dict, provider: str, scenario: ScenarioType, results_dir
 
 
 def get_api_keys(
-    scenario: ScenarioType, provider: str, keys: dict[str, list]
+    scenario: ScenarioType, provider: str, keys: dict[str, dict]
 ) -> list[str]:
     """
     Get API keys for a scenario.
