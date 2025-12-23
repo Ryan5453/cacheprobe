@@ -14,10 +14,13 @@ from sklearn.metrics import auc, precision_recall_curve
 class ScenarioType(str, Enum):
     DIRECT_SAME = "direct_same_account"
     DIRECT_CROSS = "direct_cross_account"
+
     OR_DEFAULT_SAME = "openrouter_default_same_account"
     OR_DEFAULT_CROSS = "openrouter_default_cross_account"
+
     OR_BYOK_SAME = "openrouter_byok_same_account"
     OR_BYOK_CROSS = "openrouter_byok_cross_account"
+
     VERCEL_SAME = "vercel_same_account"
     VERCEL_CROSS = "vercel_cross_account"
 
@@ -80,7 +83,6 @@ class CachingAuditor:
                 )
             else:
                 self.victim_client = self.client
-            # Model is under provider config, same as openrouter
             self.model = config["vercel"]["model"]
             self.is_openrouter = False
             self.is_vercel = True
@@ -102,7 +104,8 @@ class CachingAuditor:
 
         Functionally, this works as generating length amount of tokens
         most tokenizers have every letter prefixed with a space as
-        a valid token.
+        a valid token. It's possible this could not be fully accurate
+        with some tokenizers (but we'll pretend it is).
 
         :param length: Number of tokens to generate
         :return: String of random tokens
@@ -255,20 +258,6 @@ class CachingAuditor:
         return miss_times, hit_times, miss_usage, hit_usage
 
     @staticmethod
-    def compute_ks_test(
-        hit_times: list[float], miss_times: list[float]
-    ) -> tuple[float, float]:
-        """
-        Run Kolmogorov-Smirnov test to compare timing distributions.
-
-        :param hit_times: Response times for cache hit scenarios
-        :param miss_times: Response times for cache miss scenarios
-        :return: Tuple of (KS statistic, p-value)
-        """
-        statistic, pvalue = stats.ks_2samp(hit_times, miss_times)
-        return statistic, pvalue
-
-    @staticmethod
     def compute_metrics(hit_times: list[float], miss_times: list[float]) -> dict:
         """
         Compute evaluation metrics for cache detection performance.
@@ -377,7 +366,7 @@ class CachingAuditor:
         """
         miss_times, hit_times, miss_usage, hit_usage = self.interleaved_procedure()
 
-        ks_statistic, p_value = self.compute_ks_test(hit_times, miss_times)
+        ks_statistic, p_value = stats.ks_2samp(hit_times, miss_times)
 
         metrics = self.compute_metrics(hit_times, miss_times)
 

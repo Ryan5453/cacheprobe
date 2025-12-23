@@ -7,6 +7,9 @@ import numpy as np
 
 
 def setup_style():
+    """
+    Configures matplotlib with specific styling.
+    """
     plt.style.use("seaborn-v0_8-whitegrid")
     plt.rcParams.update(
         {
@@ -26,6 +29,12 @@ def setup_style():
 
 
 def format_name(name: str) -> str:
+    """
+    Formats provider/scenario names for display in charts.
+
+    :param name: Raw name with underscores (e.g., "openai_direct_same_account")
+    :return: Human-readable formatted name with proper capitalization
+    """
     result = name.replace("_", " ").title()
     result = result.replace("Openai", "OpenAI")
     result = result.replace("Byok", "BYOK")
@@ -33,9 +42,18 @@ def format_name(name: str) -> str:
     return result
 
 
-def generate_timing_histogram(
-    result: dict, output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_timing_histogram(result: dict, output_path: Path) -> Path:
+    """
+    Generates a histogram comparing cache hit vs miss timing distributions.
+
+    Creates a dual-histogram overlay showing the distribution of Time To First Token
+    for both cache hit and cache miss scenarios, with median lines and statistical
+    annotations. Outliers beyond 1.5×IQR are excluded from visualization.
+
+    :param result: Audit result dict containing hit_times, miss_times, and configuration
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated histogram file
+    """
     setup_style()
 
     hit_times = np.array(result["hit_times"])
@@ -125,16 +143,26 @@ def generate_timing_histogram(
 
     provider = config["provider"]
     scenario = config["scenario"]
-    filename = f"histogram_{provider}_{scenario}.{format}"
+    filename = f"histogram_{provider}_{scenario}.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_boxplot(result: dict, output_path: Path, format: str = "pdf") -> Path:
+def generate_boxplot(result: dict, output_path: Path) -> Path:
+    """
+    Generates a boxplot comparing cache hit vs miss timing distributions.
+
+    Creates side-by-side boxplots showing the quartile distribution of TTFT
+    for hit and miss scenarios. Outliers beyond 1.5×IQR are excluded.
+
+    :param result: Audit result dict containing hit_times, miss_times, and configuration
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated boxplot file
+    """
     setup_style()
 
     hit_times = np.array(result["hit_times"])
@@ -206,18 +234,26 @@ def generate_boxplot(result: dict, output_path: Path, format: str = "pdf") -> Pa
 
     provider = config["provider"]
     scenario = config["scenario"]
-    filename = f"boxplot_{provider}_{scenario}.{format}"
+    filename = f"boxplot_{provider}_{scenario}.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_comparison_chart(
-    results: list[dict], output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_comparison_chart(results: list[dict], output_path: Path) -> Path:
+    """
+    Generates a grouped bar chart comparing timing across multiple scenarios.
+
+    Creates a chart with grouped bars showing mean TTFT with standard deviation
+    error bars for both hit and miss conditions across all provided results.
+
+    :param results: List of audit result dicts to compare
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated comparison chart file
+    """
     setup_style()
 
     labels = []
@@ -273,18 +309,26 @@ def generate_comparison_chart(
 
     plt.tight_layout()
 
-    filename = f"comparison_chart.{format}"
+    filename = "comparison_chart.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
-def generate_metadata_chart(
-    results: list[dict], output_path: Path, format: str = "pdf"
-) -> Path:
+def generate_metadata_chart(results: list[dict], output_path: Path) -> Path:
+    """
+    Generates a chart showing cache metadata disclosure rates by scenario.
+
+    Creates a grouped bar chart showing the percentage of API responses that
+    disclosed cache usage in their metadata for both hit and miss scenarios.
+
+    :param results: List of audit result dicts to analyze
+    :param output_path: Directory path to save the generated figure
+    :return: Path to the generated metadata disclosure chart file
+    """
     setup_style()
 
     labels = []
@@ -357,16 +401,24 @@ def generate_metadata_chart(
 
     plt.tight_layout()
 
-    filename = f"metadata_disclosure_chart.{format}"
+    filename = "metadata_disclosure_chart.pdf"
     filepath = output_path / filename
 
-    plt.savefig(filepath, format=format)
+    plt.savefig(filepath, format="pdf")
     plt.close()
 
     return filepath
 
 
 def main():
+    """
+    CLI entry point for generating graphs from CacheProbe results.
+
+    Supports three modes:
+    - Single file: Generate histogram and boxplot for one result file
+    - Compare: Generate comparison chart for multiple result files
+    - All: Process all files in results/ directory and generate all chart types
+    """
     parser = argparse.ArgumentParser(
         description="Generate graphs from CacheProbe results for paper",
         formatter_class=argparse.RawDescriptionHelpFormatter,

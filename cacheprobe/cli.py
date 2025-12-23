@@ -182,11 +182,15 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
             [
                 (provider_name, ScenarioType.DIRECT_SAME),
                 (provider_name, ScenarioType.DIRECT_CROSS),
-                (provider_name, ScenarioType.OR_DEFAULT_SAME),
-                (provider_name, ScenarioType.OR_DEFAULT_CROSS),
             ]
         )
-        # Add Vercel tests for providers that have vercel config
+        if "openrouter" in provider_config:
+            test_plan.extend(
+                [
+                    (provider_name, ScenarioType.OR_DEFAULT_SAME),
+                    (provider_name, ScenarioType.OR_DEFAULT_CROSS),
+                ]
+            )
         if "vercel" in provider_config:
             test_plan.extend(
                 [
@@ -199,14 +203,14 @@ def run_all_tests(keys: dict[str, dict], providers: dict[str, dict], results_dir
 
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
-        result = run_test(provider, scenario, keys, providers, results_dir)
+        run_test(provider, scenario, keys, providers, results_dir)
 
 
-def run_byok_tests(
+def run_openrouter_byok_tests(
     keys: dict[str, dict], providers: dict[str, dict], results_dir: Path
 ):
     """
-    Run BYOK (Bring Your Own Key) test suite.
+    Run the OpenRouterBYOK (Bring Your Own Key) test suite.
 
     :param keys: Dictionary of API keys for all providers
     :param providers: Dictionary of provider configurations
@@ -225,7 +229,7 @@ def run_byok_tests(
 
     for idx, (provider, scenario) in enumerate(test_plan, 1):
         print(f"\n[{idx}/{len(test_plan)}]", end=" ")
-        result = run_test(provider, scenario, keys, providers, results_dir)
+        run_test(provider, scenario, keys, providers, results_dir)
 
 
 def run_single_test(
@@ -256,7 +260,7 @@ def run_single_test(
         print(f"\nValid scenarios: {[s.value for s in ScenarioType]}")
         return
 
-    result = run_test(provider, scenario_type, keys, providers, results_dir)
+    run_test(provider, scenario_type, keys, providers, results_dir)
 
 
 def main():
@@ -271,9 +275,9 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["single", "all", "byok"],
+        choices=["single", "all", "openrouter_byok"],
         default="single",
-        help="Test mode: single (specific test), all (all non-BYOK tests), or byok (BYOK tests only)",
+        help="Test mode: single (specific test), all (all non-BYOK tests), or openrouter_byok (BYOK tests only)",
     )
     parser.add_argument(
         "--provider",
@@ -312,8 +316,8 @@ def main():
 
     if args.mode == "all":
         run_all_tests(keys, providers, results_dir)
-    elif args.mode == "byok":
-        run_byok_tests(keys, providers, results_dir)
+    elif args.mode == "openrouter_byok":
+        run_openrouter_byok_tests(keys, providers, results_dir)
     elif args.mode == "single":
         if not args.provider or not args.scenario:
             print("Error: --provider and --scenario required for single mode")
