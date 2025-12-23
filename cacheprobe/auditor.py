@@ -67,7 +67,8 @@ class CachingAuditor:
             else:
                 self.victim_client = self.client
             self.model = config["openrouter"]["model"]
-            self.use_provider_control = True
+            self.is_openrouter = True
+            self.is_vercel = False
         elif scenario.value.startswith("vercel"):
             self.client = OpenAI(
                 base_url="https://ai-gateway.vercel.sh/v1", api_key=key1
@@ -80,7 +81,8 @@ class CachingAuditor:
                 self.victim_client = self.client
             # Model is under provider config, same as openrouter
             self.model = config["vercel"]["model"]
-            self.use_provider_control = False
+            self.is_openrouter = False
+            self.is_vercel = True
         else:
             self.client = OpenAI(base_url=config["direct"]["base_url"], api_key=key1)
             if self.is_cross_account and key2:
@@ -90,7 +92,8 @@ class CachingAuditor:
             else:
                 self.victim_client = self.client
             self.model = config["direct"]["model"]
-            self.use_provider_control = False
+            self.is_openrouter = False
+            self.is_vercel = False
 
     def generate_random_prompt(self, length: int) -> str:
         """
@@ -146,14 +149,22 @@ class CachingAuditor:
         if cache_key is not None:
             kwargs["prompt_cache_key"] = cache_key
 
-        # By default, OpenRouter load balances across all providers.
-        # This forces it to use the specified provider so we can test prompt
+        # By default, gateways load balance across all providers.
+        # This forces them to use the specified provider so we can test prompt
         # caching isolation for a specific provider.
-        if self.use_provider_control:
+        if self.is_openrouter:
             kwargs["extra_body"] = {
                 "provider": {
                     "order": [self.provider_name],
                     "allow_fallbacks": False,
+                }
+            }
+        elif self.is_vercel:
+            kwargs["extra_body"] = {
+                "providerOptions": {
+                    "gateway": {
+                        "order": [self.provider_name],
+                    }
                 }
             }
 
