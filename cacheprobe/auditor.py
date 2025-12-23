@@ -1,5 +1,6 @@
 import random
 import string
+import subprocess
 import time
 import uuid
 from enum import Enum
@@ -348,6 +349,26 @@ class CachingAuditor:
 
         return result
 
+    @staticmethod
+    def _get_git_commit() -> str | None:
+        """
+        Get the current git commit hash.
+
+        :return: Short git commit hash or None if not in a git repo
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return None
+
     def run_audit(self) -> dict:
         """
         Run complete audit and return results.
@@ -376,6 +397,7 @@ class CachingAuditor:
                 "use_cache_keys": self.use_cache_keys,
                 "attacker_cache_key": self.attacker_cache_key,
                 "victim_cache_key": self.victim_cache_key,
+                "git_commit": self._get_git_commit(),
             },
             "counts": {
                 "expected_miss_count": self.config["num_samples"],

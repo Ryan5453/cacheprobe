@@ -366,7 +366,6 @@ def generate_metadata_chart(
     return filepath
 
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Generate graphs from CacheProbe results for paper",
@@ -429,7 +428,6 @@ def main():
         print(f"  Created: {chart_path}")
         generated_files.append(chart_path)
 
-
     if args.all:
         results_dir = Path("results")
         if not results_dir.exists():
@@ -461,7 +459,6 @@ def main():
         metadata_path = generate_metadata_chart(results, args.output)
         print(f"Created metadata disclosure chart: {metadata_path}")
         generated_files.append(metadata_path)
-
 
     if not generated_files:
         parser.print_help()
