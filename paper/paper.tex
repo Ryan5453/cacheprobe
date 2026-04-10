@@ -29,7 +29,7 @@
     Over the past year, prompt caching in Large Language Models (LLMs) has become increasingly more popular across inference APIs.
     Prompt caching helps save precious compute resources and speeds up response times by reusing parts of the KV cache of a specific prompt for another request.
     However, many implementations of prompt caching are not secure against timing attacks or even basic metadata disclosure.
-    Gu et al.~\cite{gu2025auditing} develop a method to audit prompt caching in LLMs.
+    Gu et al.~\cite{DBLP:conf/icml/GuLKLH25} develop a method to audit prompt caching in LLMs.
     This paper investigates whether OpenRouter's API gateway architecture introduces prompt caching vulnerabilities that bypass provider-level prompt cache isolation guarantees.
     Most LLM inference providers implement per-account or per-organization prompt caching to prevent data leaks, but does routing through OpenRouter with shared organizational credentials inadvertently create global cache sharing across all OpenRouter users?
 \end{abstract}
@@ -51,7 +51,7 @@ Prompt caching allows providers to offer significant discounts on input tokens.
 OpenAI, for example, offers an automatic 90\% discount on all cached input tokens in their most recent GPT-5 family of models on the standard tier.
 Google's Gemini 2.5 and 3.0 family of models match this discount.
 
-The authors of \cite{gu2025auditing} discovered that via timing side-channels, it is possible to detect whether or not a provider implements prompt caching (which can leak model architecture details) as well as audit the contents of the cache.
+The authors of \cite{DBLP:conf/icml/GuLKLH25} discovered that via timing side-channels, it is possible to detect whether or not a provider implements prompt caching (which can leak model architecture details) as well as audit the contents of the cache.
 If caches are shared across accounts, prompt caching timing signals can become a side-channel that leaks information about other users' prompts.
 Since this work was published, most inference providers have implemented per-account or per-organization prompt caching to mitigate this risk.
 However, API gateways like OpenRouter add an additional layer of abstraction to this issue.
@@ -64,7 +64,7 @@ This paper investigates whether OpenRouter's API gateway architecture introduces
 
 \subsection{Prompt Caching in LLM APIs}
 
-During inference, transformers-based LLMs compute key-value (KV) attention states for each token in the input.
+During inference, transformer-based LLMs compute key-value (KV) attention states for each token in the input.
 For prompts of considerable length, this computation adds a significant amount of latency and incurs high computational costs.
 Prompt caching largely fixes this issue by exploiting the fact that many requests (especially for multi-turn chat applications) share common prefixes and store and reuse those KV attention states.
 Inference providers check if a prefix of a prompt matches a cached entry upon receiving a request.
@@ -75,7 +75,7 @@ If a match is found, the provider can reuse the cached KV attention states for t
 The difference in latency between cache hits and misses creates a timing side-channel.
 Attackers can measure the TTFT of a request to determine whether or not a given prefix exists in the cache.
 By systematically probing with candidate prefixes, an attacker can reconstruct cached prompts token-by-token via binary search.
-The authors of \cite{gu2025auditing} formalize this attack and demonstrate its feasibility across major providers.
+The authors of \cite{DBLP:conf/icml/GuLKLH25} formalize this attack and demonstrate its feasibility across major providers.
 
 \subsection{OpenRouter Architecture}
 
@@ -89,9 +89,9 @@ From the provider's perspective, all the OpenRouter traffic is coming from a sin
 
 \subsection{Adversary Goals and Capabilities}
 
-We consider an adversary who is an authenticated user of OpenRouter, trying to detect or reconstruct prompts sent by other OpenRouter Users.
+We consider an adversary who is an authenticated user of OpenRouter, trying to detect or reconstruct prompts sent by other OpenRouter users.
 The primary goal of the adversary is to determine whether or not a specific prompt prefix exists in the inference provider's cache, which indicates that another user recently submitted a prompt with that prefix.
-If the adversary is able to detect prompt caching, it enables prompt extraction attacks as described in \cite{gu2025auditing}, where an attacker can iteratively recover cached prompts token-by-token.
+If the adversary is able to detect prompt caching, it enables prompt extraction attacks as described in \cite{DBLP:conf/icml/GuLKLH25}, where an attacker can iteratively recover cached prompts token-by-token.
 
 \subsection{OpenRouter Architecture Assumptions}
 
@@ -164,7 +164,7 @@ In BYOK mode, users supply their own provider credentials via OpenRouter's crede
 
 We employ two complementary detection methods: timing-based statistical analysis and metadata disclosure analysis.
 For timing analysis, we use the two-sample Kolmogorov-Smirnov test to compare the TTFT distributions of cache hit and miss samples.
-Following \cite{gu2025auditing}, we use a stringent significance threshold of $p < 10^{-8}$ to minimize false positives given the inherent noise in network timing measurements.
+Following \cite{DBLP:conf/icml/GuLKLH25}, we use a stringent significance threshold of $p < 10^{-8}$ to minimize false positives given the inherent noise in network timing measurements.
 
 For metadata analysis, we examine the \texttt{cached\_tokens} field returned in API response usage metadata.
 Some providers explicitly report how many input tokens were served from cache, providing ground-truth evidence of cache utilization independent of timing signals.
@@ -188,7 +188,7 @@ Model selection was constrained by OpenRouter compatibility requirements; notabl
 
 Our testing harness is implemented in Python using the OpenAI SDK.
 All experiments were conducted on an Ubuntu virtual machine hosted on Oracle Cloud in the US-East (Ashburn, Virginia) region to ensure consistent network conditions and eliminate variability from residential network connections.
-Experiments were conducted between November 12 and December 8, 2024.
+Experiments were conducted between November 12 and December 8, 2025.
 
 For each provider, we collected 250 sample pairs per scenario using the interleaved procedure described in Section~\ref{sec:methodology}.
 Prompts consisted of 4,096 tokens with a 95\% prefix fraction, and we inserted a 500ms delay between requests to allow cache entries to persist while avoiding rate limiting.
@@ -336,6 +336,11 @@ Second, our experiments used randomly generated prompts rather than realistic ap
 Third, cache eviction policies and timing may vary based on provider load, time of day, or other factors we did not control for.
 Finally, our statistical thresholds, while conservative, may not capture all forms of cache leakage, particularly in cases of partial or intermittent sharing.
 
+\section*{Responsible Disclosure}
+We initially contacted OpenRouter regarding these findings on November 14th, 2025, and followed up on December 12th, 2025 with a draft of this paper. 
+OpenRouter acknowledged the report and requested access to our GitHub repository, which was private at the time.
+We sent an invitation to OpenRouter's team but did not receive a response.
+
 \section{Conclusion}
 \label{sec:conclusion}
 
@@ -353,7 +358,7 @@ We recommend that OpenRouter implement per-user cache isolation mechanisms, and 
 \section{Data Availability}
 \label{sec:data}
 
-The complete source code for CacheProbe, including all experimental results and raw timing data, is publicly available at \url{https://github.com/ryan5453/cacheprobe}.
+The complete source code for CacheProbe, including all experimental results and raw timing data, is publicly available at \url{https://github.com/Ryan5453/cacheprobe}.
 
 \section{Detailed Timing Distributions}
 \label{sec:timing-appendix}
