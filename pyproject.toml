@@ -3,7 +3,7 @@ name = "cacheprobe"
 version = "1.0.0.dev1"
 description = "Auditing Prompt Cache Isolation in Gateway APIs"
 readme = "readme.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "openai>=2.7.1",
     "pyyaml>=6.0.2",
